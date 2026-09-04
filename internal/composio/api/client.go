@@ -182,7 +182,10 @@ func (c *Client) Do(ctx context.Context, scope AuthScope, method, path string, b
 }
 
 func (c *Client) roundTrip(ctx context.Context, scope AuthScope, method, path string, payload []byte) ([]byte, int, http.Header, error) {
-	u := c.endpoint + APIVersionPath + path
+	u, err := requestURL(c.endpoint, path)
+	if err != nil {
+		return nil, 0, nil, err
+	}
 	var rdr io.Reader
 	if payload != nil {
 		rdr = bytes.NewReader(payload)
@@ -245,6 +248,9 @@ func validateEndpoint(endpoint string) error {
 	if u.Host == "" {
 		return fmt.Errorf("endpoint must include a host")
 	}
+	if u.User != nil {
+		return fmt.Errorf("endpoint must be an origin without user info")
+	}
 	if u.RawQuery != "" || u.Fragment != "" {
 		return fmt.Errorf("endpoint must be an origin without query or fragment")
 	}
@@ -252,6 +258,19 @@ func validateEndpoint(endpoint string) error {
 		return fmt.Errorf("endpoint must be an origin without a path; the provider appends %s", APIVersionPath)
 	}
 	return nil
+}
+
+func requestURL(endpoint, apiPath string) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("invalid endpoint: %w", err)
+	}
+	u.User = nil
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.Path = strings.TrimSuffix(u.Path, "/") + APIVersionPath + apiPath
+	u.RawPath = ""
+	return u.String(), nil
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

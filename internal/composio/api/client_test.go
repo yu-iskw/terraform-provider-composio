@@ -366,6 +366,7 @@ func TestEndpointRejectsPathAndQuery(t *testing.T) {
 		"https://backend.composio.dev/api/v3.1",
 		"https://backend.composio.dev/?x=1",
 		"https://backend.composio.dev/#frag",
+		"https://user:pass@backend.composio.dev",
 	} {
 		if _, err := New(Options{ProjectAPIKey: "k", Endpoint: endpoint}); err == nil {
 			t.Fatalf("expected error for %s", endpoint)
@@ -373,6 +374,16 @@ func TestEndpointRejectsPathAndQuery(t *testing.T) {
 	}
 	if _, err := New(Options{ProjectAPIKey: "k", Endpoint: "https://backend.composio.dev/"}); err != nil {
 		t.Fatalf("origin with trailing slash must be accepted: %v", err)
+	}
+}
+
+func TestRequestURLJoinsPinnedPrefix(t *testing.T) {
+	got, err := requestURL("https://backend.composio.dev/", "/auth_configs/ac_1")
+	if err != nil {
+		t.Fatalf("requestURL: %v", err)
+	}
+	if got != "https://backend.composio.dev/api/v3.1/auth_configs/ac_1" {
+		t.Fatalf("got %s", got)
 	}
 }
 

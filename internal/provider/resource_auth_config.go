@@ -228,6 +228,9 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(id))...)
 	if resp.Diagnostics.HasError() {
+		if delErr := r.client.DeleteAuthConfig(ctx, id); delErr != nil {
+			resp.Diagnostics.AddError("Unable to roll back Composio auth config after a state write failure", formatAPIError(delErr))
+		}
 		return
 	}
 	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
