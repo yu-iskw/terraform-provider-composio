@@ -37,13 +37,13 @@ resource "composio_auth_config" "github" {
 
 ## Provider configuration
 
-| Attribute | Env | Purpose |
-| --- | --- | --- |
-| `api_key` | `COMPOSIO_API_KEY` | Project key (`x-api-key`) |
-| `org_api_key` | `COMPOSIO_ORG_API_KEY` | Organization key (`x-org-api-key`) |
-| `endpoint` | `COMPOSIO_ENDPOINT` | API origin. Default `https://backend.composio.dev` |
-| `max_concurrent_requests` | | In-flight HTTP cap. Default 8 |
-| `request_timeout` | | Go duration. Default `30s` |
+| Attribute                 | Env                    | Purpose                                            |
+| ------------------------- | ---------------------- | -------------------------------------------------- |
+| `api_key`                 | `COMPOSIO_API_KEY`     | Project key (`x-api-key`)                          |
+| `org_api_key`             | `COMPOSIO_ORG_API_KEY` | Organization key (`x-org-api-key`)                 |
+| `endpoint`                | `COMPOSIO_ENDPOINT`    | API origin. Default `https://backend.composio.dev` |
+| `max_concurrent_requests` |                        | In-flight HTTP cap. Default 8                      |
+| `request_timeout`         |                        | Go duration. Default `30s`                         |
 
 At least one credential is required. Project-scoped resources need `api_key`. The client always calls `/api/v3.1` under the origin. That prefix does not float.
 
