@@ -42,7 +42,7 @@ func TestProviderSchemaUsesComposioConfiguration(t *testing.T) {
 
 func TestProviderRegistersAuthConfigAndToolkit(t *testing.T) {
 	p := New("test")()
-	if got := len(p.Resources(context.Background())); got != 1 {
+	if got := len(p.Resources(context.Background())); got != 2 {
 		t.Fatalf("resources = %d", got)
 	}
 	if got := len(p.DataSources(context.Background())); got != 1 {

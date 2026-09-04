@@ -451,6 +451,76 @@ func TestCreateAuthConfigCustomUsesAuthScheme(t *testing.T) {
 	}
 }
 
+func TestCreateAuthConfigEnabledForToolRouter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		ac, ok := body["auth_config"].(map[string]any)
+		if !ok {
+			t.Errorf("auth_config = %T", body["auth_config"])
+			return
+		}
+		if ac["is_enabled_for_tool_router"] != true {
+			t.Errorf("is_enabled_for_tool_router = %v", ac["is_enabled_for_tool_router"])
+		}
+		if ac["type"] != "use_custom_auth" {
+			t.Errorf("type = %v", ac["type"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		writeJSON(t, w, `{"auth_config":{"id":"ac_router"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	enabled := true
+	c := testClient(t, srv, Options{})
+	id, err := c.CreateAuthConfig(context.Background(), CreateAuthConfigInput{
+		ToolkitSlug:          "CUSTOM_ACME",
+		AuthScheme:           "API_KEY",
+		Credentials:          map[string]string{},
+		EnabledForToolRouter: &enabled,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id != "ac_router" {
+		t.Fatalf("id = %s", id)
+	}
+}
+
+func TestUpdateAuthConfigEnabledForToolRouter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			t.Errorf("method = %s", r.Method)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		if body["type"] != "custom" {
+			t.Errorf("type = %v", body["type"])
+		}
+		if body["is_enabled_for_tool_router"] != true {
+			t.Errorf("is_enabled_for_tool_router = %v", body["is_enabled_for_tool_router"])
+		}
+		w.WriteHeader(http.StatusOK)
+		writeJSON(t, w, `{"success":true,"message":"ok"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	enabled := true
+	c := testClient(t, srv, Options{})
+	if err := c.UpdateAuthConfig(context.Background(), "ac_1", UpdateAuthConfigInput{
+		Managed:              false,
+		EnabledForToolRouter: &enabled,
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+}
+
 func TestGetAuthConfigReadsCredentialScopes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(t, w, `{

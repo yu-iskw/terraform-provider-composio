@@ -465,3 +465,23 @@ func TestUpdateInputClearsManagedScopes(t *testing.T) {
 		t.Fatalf("scopes = %#v", *in.Scopes)
 	}
 }
+
+func TestAuthConfigPatchNeededToolRouter(t *testing.T) {
+	plan := authConfigResourceModel{
+		Name:                 types.StringValue("n"),
+		EnabledForToolRouter: types.BoolValue(true),
+		ManagedAuth:          &managedAuthModel{},
+	}
+	state := authConfigResourceModel{
+		Name:                 types.StringValue("n"),
+		EnabledForToolRouter: types.BoolValue(false),
+		ManagedAuth:          &managedAuthModel{},
+	}
+	if !authConfigPatchNeeded(plan, state) {
+		t.Fatal("expected patch when enabled_for_tool_router changes")
+	}
+	state.EnabledForToolRouter = types.BoolValue(true)
+	if authConfigPatchNeeded(plan, state) {
+		t.Fatal("expected no patch when unchanged")
+	}
+}

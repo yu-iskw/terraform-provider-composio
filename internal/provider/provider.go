@@ -156,6 +156,7 @@ func (p *composioProvider) Configure(ctx context.Context, req provider.Configure
 func (p *composioProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewAuthConfigResource,
+		NewCustomToolkitResource,
 	}
 }
 

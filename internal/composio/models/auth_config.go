@@ -29,6 +29,8 @@ type AuthConfig struct {
 	RestrictToFollowingTools []string
 	Scopes                   *[]string
 	CreatedAt                string
+	// IsEnabledForToolRouter is nil when the API omits the field.
+	IsEnabledForToolRouter *bool
 }
 
 func (a AuthConfig) Enabled() bool {

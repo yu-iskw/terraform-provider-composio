@@ -23,12 +23,13 @@ make format
 
 Acceptance tests:
 
-Use a **dedicated** Composio project API key. Current Acc coverage exercises `composio_toolkit` (read) and managed `composio_auth_config` (create/update/import/destroy). Do not point Acc at a production project.
+Use a **dedicated** Composio project API key. Current Acc coverage exercises `composio_toolkit` (read), managed `composio_auth_config` (create/update/import/destroy), and optionally `composio_custom_toolkit` when `COMPOSIO_ACC_CUSTOM_MCP_URL` is set to a public HTTPS MCP endpoint. Do not point Acc at a production project.
 
 ```shell
 export TF_ACC=1
 export COMPOSIO_API_KEY=...
 # optional: export COMPOSIO_ENDPOINT=https://backend.composio.dev
+# optional: export COMPOSIO_ACC_CUSTOM_MCP_URL=https://mcp.example.com/mcp
 make testacc
 ```
 

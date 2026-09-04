@@ -40,6 +40,7 @@ type CreateAuthConfigInput struct {
 	Credentials              map[string]string
 	RestrictToFollowingTools []string
 	Scopes                   []string
+	EnabledForToolRouter     *bool
 }
 
 type UpdateAuthConfigInput struct {
@@ -48,6 +49,7 @@ type UpdateAuthConfigInput struct {
 	Credentials              map[string]string
 	RestrictToFollowingTools *[]string
 	Scopes                   *[]string
+	EnabledForToolRouter     *bool
 }
 
 func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput) (string, error) {
@@ -73,6 +75,9 @@ func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput)
 	}
 	if in.RestrictToFollowingTools != nil {
 		req.AuthConfig.RestrictToFollowingTools = in.RestrictToFollowingTools
+	}
+	if in.EnabledForToolRouter != nil {
+		req.AuthConfig.IsEnabledForToolRouter = in.EnabledForToolRouter
 	}
 
 	var raw json.RawMessage
@@ -108,6 +113,7 @@ func (c *Client) UpdateAuthConfig(ctx context.Context, id string, in UpdateAuthC
 	}
 	body.Name = in.Name
 	body.RestrictToFollowingTools = in.RestrictToFollowingTools
+	body.IsEnabledForToolRouter = in.EnabledForToolRouter
 	path := "/auth_configs/" + url.PathEscape(id)
 	return c.Do(ctx, ScopeProject, http.MethodPatch, path, body, nil)
 }
@@ -134,6 +140,7 @@ type authConfigWire struct {
 	IsComposioManaged        bool            `json:"is_composio_managed"`
 	RestrictToFollowingTools []string        `json:"restrict_to_following_tools"`
 	CreatedAt                string          `json:"created_at"`
+	IsEnabledForToolRouter   *bool           `json:"is_enabled_for_tool_router"`
 	Credentials              json.RawMessage `json:"credentials"`
 	Toolkit                  struct {
 		Slug string `json:"slug"`
@@ -155,6 +162,7 @@ type createAuthConfigBody struct {
 	AuthScheme               string         `json:"authScheme,omitempty"`
 	Credentials              map[string]any `json:"credentials,omitempty"`
 	RestrictToFollowingTools []string       `json:"restrict_to_following_tools,omitempty"`
+	IsEnabledForToolRouter   *bool          `json:"is_enabled_for_tool_router,omitempty"`
 }
 
 type updateAuthConfigBody struct {
@@ -163,6 +171,7 @@ type updateAuthConfigBody struct {
 	Scopes                   *string        `json:"scopes,omitempty"`
 	Credentials              map[string]any `json:"credentials,omitempty"`
 	RestrictToFollowingTools *[]string      `json:"restrict_to_following_tools,omitempty"`
+	IsEnabledForToolRouter   *bool          `json:"is_enabled_for_tool_router,omitempty"`
 }
 
 func (w authConfigWire) toModel() models.AuthConfig {
@@ -181,6 +190,7 @@ func (w authConfigWire) toModel() models.AuthConfig {
 		RestrictToFollowingTools: w.RestrictToFollowingTools,
 		Scopes:                   scopePtr,
 		CreatedAt:                w.CreatedAt,
+		IsEnabledForToolRouter:   w.IsEnabledForToolRouter,
 	}
 }
 

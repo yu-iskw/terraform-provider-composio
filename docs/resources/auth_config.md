@@ -42,6 +42,7 @@ resource "composio_auth_config" "github" {
 
 - `custom_auth` (Attributes) Bring your own credentials. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `managed_auth` forces replacement. (see [below for nested schema](#nestedatt--custom_auth))
 - `enabled` (Boolean) When false, the provider disables the auth config when Composio still reports it enabled. Disabled configs cannot start new connections.
+- `enabled_for_tool_router` (Boolean) When true, sessions can match connected accounts for this auth config by `user_id` automatically. Required for authenticated Custom MCP toolkits used in sessions. Maps to Composio `is_enabled_for_tool_router`.
 - `managed_auth` (Attributes) Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `custom_auth` forces replacement. (see [below for nested schema](#nestedatt--managed_auth))
 - `name` (String) Display name. The API may assign a default when omitted.
 

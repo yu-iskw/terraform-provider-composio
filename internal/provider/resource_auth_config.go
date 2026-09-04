@@ -50,16 +50,17 @@ type authConfigResource struct {
 }
 
 type authConfigResourceModel struct {
-	ID                types.String      `tfsdk:"id"`
-	ToolkitSlug       types.String      `tfsdk:"toolkit_slug"`
-	Name              types.String      `tfsdk:"name"`
-	Enabled           types.Bool        `tfsdk:"enabled"`
-	ManagedAuth       *managedAuthModel `tfsdk:"managed_auth"`
-	CustomAuth        *customAuthModel  `tfsdk:"custom_auth"`
-	AuthScheme        types.String      `tfsdk:"auth_scheme"`
-	IsComposioManaged types.Bool        `tfsdk:"is_composio_managed"`
-	Status            types.String      `tfsdk:"status"`
-	CreatedAt         types.String      `tfsdk:"created_at"`
+	ID                   types.String      `tfsdk:"id"`
+	ToolkitSlug          types.String      `tfsdk:"toolkit_slug"`
+	Name                 types.String      `tfsdk:"name"`
+	Enabled              types.Bool        `tfsdk:"enabled"`
+	EnabledForToolRouter types.Bool        `tfsdk:"enabled_for_tool_router"`
+	ManagedAuth          *managedAuthModel `tfsdk:"managed_auth"`
+	CustomAuth           *customAuthModel  `tfsdk:"custom_auth"`
+	AuthScheme           types.String      `tfsdk:"auth_scheme"`
+	IsComposioManaged    types.Bool        `tfsdk:"is_composio_managed"`
+	Status               types.String      `tfsdk:"status"`
+	CreatedAt            types.String      `tfsdk:"created_at"`
 }
 
 type managedAuthModel struct {
@@ -109,6 +110,14 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
 				MarkdownDescription: "When false, the provider disables the auth config when Composio still reports it enabled. Disabled configs cannot start new connections.",
+			},
+			"enabled_for_tool_router": schema.BoolAttribute{
+				Optional:            true,
+				Computed:            true,
+				MarkdownDescription: "When true, sessions can match connected accounts for this auth config by `user_id` automatically. Required for authenticated Custom MCP toolkits used in sessions. Maps to Composio `is_enabled_for_tool_router`.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"managed_auth": schema.SingleNestedAttribute{
 				Optional:            true,
@@ -376,6 +385,10 @@ func createInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		ToolkitSlug: plan.ToolkitSlug.ValueString(),
 		Name:        plan.Name.ValueString(),
 	}
+	if !plan.EnabledForToolRouter.IsNull() && !plan.EnabledForToolRouter.IsUnknown() {
+		v := plan.EnabledForToolRouter.ValueBool()
+		in.EnabledForToolRouter = &v
+	}
 	in.RestrictToFollowingTools, diags = setToStrings(ctx, plan.restrictToFollowingTools())
 	if diags.HasError() {
 		return in, diags
@@ -389,6 +402,9 @@ func createInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		in.AuthScheme = plan.CustomAuth.AuthScheme.ValueString()
 		creds, d := credentialsFromConfig(ctx, config.CustomAuth)
 		diags.Append(d...)
+		if creds == nil {
+			creds = map[string]string{}
+		}
 		in.Credentials = creds
 	}
 	return in, diags
@@ -420,6 +436,10 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		if len(creds) > 0 {
 			in.Credentials = creds
 		}
+	}
+	if !plan.EnabledForToolRouter.IsNull() && !plan.EnabledForToolRouter.IsUnknown() {
+		v := plan.EnabledForToolRouter.ValueBool()
+		in.EnabledForToolRouter = &v
 	}
 	return in, diags
 }
@@ -464,6 +484,11 @@ func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	}
 	m.Name = types.StringValue(remote.Name)
 	m.Enabled = types.BoolValue(remote.Enabled())
+	if remote.IsEnabledForToolRouter != nil {
+		m.EnabledForToolRouter = types.BoolValue(*remote.IsEnabledForToolRouter)
+	} else if m.EnabledForToolRouter.IsUnknown() {
+		m.EnabledForToolRouter = types.BoolNull()
+	}
 	m.AuthScheme = types.StringValue(remote.AuthScheme)
 	m.IsComposioManaged = types.BoolValue(remote.IsComposioManaged)
 	m.Status = types.StringValue(remote.Status)
@@ -513,6 +538,9 @@ func remoteStringSet(values *[]string, prior types.Set) types.Set {
 
 func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
 	if !plan.Name.IsUnknown() && !plan.Name.Equal(state.Name) {
+		return true
+	}
+	if !plan.EnabledForToolRouter.IsUnknown() && !plan.EnabledForToolRouter.Equal(state.EnabledForToolRouter) {
 		return true
 	}
 	planTools := plan.restrictToFollowingTools()
