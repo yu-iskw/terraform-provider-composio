@@ -377,6 +377,29 @@ func TestEndpointRejectsPathAndQuery(t *testing.T) {
 	}
 }
 
+func TestClientRefusesCrossOriginRedirect(t *testing.T) {
+	var leaked string
+	dest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked = r.Header.Get("x-api-key")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(dest.Close)
+
+	src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dest.URL+"/api/v3.1/toolkits/github", http.StatusFound)
+	}))
+	t.Cleanup(src.Close)
+
+	c := testClient(t, src, Options{ProjectAPIKey: "project-secret"})
+	_, err := c.GetToolkit(context.Background(), "github")
+	if err == nil {
+		t.Fatal("expected cross-origin redirect to fail")
+	}
+	if leaked != "" {
+		t.Fatalf("api key forwarded to %s", dest.URL)
+	}
+}
+
 func TestRequestURLJoinsPinnedPrefix(t *testing.T) {
 	got, err := requestURL("https://backend.composio.dev/", "/auth_configs/ac_1")
 	if err != nil {

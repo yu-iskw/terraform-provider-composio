@@ -112,8 +112,9 @@ func New(opts Options) (*Client, error) {
 		userAgent:     ua,
 		sem:           semaphore.NewWeighted(maxC),
 		http: &http.Client{
-			Timeout:   timeout,
-			Transport: base,
+			Timeout:       timeout,
+			Transport:     base,
+			CheckRedirect: sameOriginRedirects,
 		},
 	}, nil
 }
@@ -271,6 +272,20 @@ func requestURL(endpoint, apiPath string) (string, error) {
 	u.Path = strings.TrimSuffix(u.Path, "/") + APIVersionPath + apiPath
 	u.RawPath = ""
 	return u.String(), nil
+}
+
+func sameOriginRedirects(req *http.Request, via []*http.Request) error {
+	if len(via) == 0 {
+		return nil
+	}
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	orig := via[0].URL
+	if req.URL.Scheme != orig.Scheme || req.URL.Host != orig.Host {
+		return fmt.Errorf("refusing cross-origin redirect from %s://%s to %s://%s", orig.Scheme, orig.Host, req.URL.Scheme, req.URL.Host)
+	}
+	return nil
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

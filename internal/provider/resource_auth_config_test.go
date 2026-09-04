@@ -191,12 +191,27 @@ func TestAuthConfigPatchNeededSkipsEnabledOnly(t *testing.T) {
 			Scopes:                   nullSet,
 		},
 	}
-	if authConfigPatchNeeded(plan, state, authConfigResourceModel{}) {
+	if authConfigPatchNeeded(plan, state) {
 		t.Fatal("enabled-only change must not PATCH auth config")
 	}
 	plan.Name = types.StringValue("Renamed")
-	if !authConfigPatchNeeded(plan, state, authConfigResourceModel{}) {
+	if !authConfigPatchNeeded(plan, state) {
 		t.Fatal("name change must PATCH")
+	}
+}
+
+func TestAuthConfigPatchNeededIgnoresUnknownComputedName(t *testing.T) {
+	nullSet := types.SetNull(types.StringType)
+	state := authConfigResourceModel{
+		Name:        types.StringValue("GitHub"),
+		ManagedAuth: &managedAuthModel{RestrictToFollowingTools: nullSet, Scopes: nullSet},
+	}
+	plan := authConfigResourceModel{
+		Name:        types.StringUnknown(),
+		ManagedAuth: &managedAuthModel{RestrictToFollowingTools: nullSet, Scopes: types.SetUnknown(types.StringType)},
+	}
+	if authConfigPatchNeeded(plan, state) {
+		t.Fatal("unknown computed name/scopes must not PATCH")
 	}
 }
 

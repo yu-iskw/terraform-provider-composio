@@ -72,7 +72,7 @@ Optional:
 Optional:
 
 - `restrict_to_following_tools` (Set of String) Tool slugs this auth config may use. Order is not significant.
-- `scopes` (Set of String) OAuth scopes for managed auth. Order is not significant.
+- `scopes` (Set of String) OAuth scopes for managed auth. If omitted, Terraform stores the scopes Composio reports. Set to `[]` to clear. Order is not significant.
 
 ## Import
 

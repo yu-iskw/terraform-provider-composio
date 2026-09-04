@@ -23,7 +23,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -98,6 +100,9 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "Display name. The API may assign a default when omitted.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"enabled": schema.BoolAttribute{
 				Optional:            true,
@@ -116,8 +121,12 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 					},
 					"scopes": schema.SetAttribute{
 						Optional:            true,
+						Computed:            true,
 						ElementType:         types.StringType,
-						MarkdownDescription: "OAuth scopes for managed auth. Order is not significant.",
+						MarkdownDescription: "OAuth scopes for managed auth. If omitted, Terraform stores the scopes Composio reports. Set to `[]` to clear. Order is not significant.",
+						PlanModifiers: []planmodifier.Set{
+							setplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -149,18 +158,30 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 			"auth_scheme": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Scheme reported by Composio.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"is_composio_managed": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "True when Composio manages the credentials.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"status": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "`ENABLED` or `DISABLED`.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "Creation timestamp from Composio.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 	}
@@ -259,7 +280,7 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 	}
 
 	id := plan.ID.ValueString()
-	if authConfigPatchNeeded(plan, state, config) {
+	if authConfigPatchNeeded(plan, state) {
 		in, diags := updateInputFromModels(ctx, plan, config)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
@@ -309,6 +330,16 @@ func (r *authConfigResource) ModifyPlan(ctx context.Context, req resource.Modify
 	}
 	if stateManaged.IsNull() != planManaged.IsNull() {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("managed_auth"), path.Root("custom_auth"))
+	}
+
+	var planEnabled, stateEnabled types.Bool
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("enabled"), &planEnabled)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("enabled"), &stateEnabled)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if !planEnabled.IsUnknown() && !planEnabled.Equal(stateEnabled) {
+		resp.Diagnostics.Append(resp.Plan.SetAttribute(ctx, path.Root("status"), types.StringUnknown())...)
 	}
 }
 
@@ -479,16 +510,18 @@ func remoteStringSet(values *[]string, prior types.Set) types.Set {
 	return optionalStringSet(*values, prior)
 }
 
-func authConfigPatchNeeded(plan, state, config authConfigResourceModel) bool {
-	if !plan.Name.Equal(state.Name) {
-		return true
-	}
-	if config.CustomAuth != nil && !config.CustomAuth.Credentials.IsNull() && !config.CustomAuth.Credentials.IsUnknown() {
+func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
+	if !plan.Name.IsUnknown() && !plan.Name.Equal(state.Name) {
 		return true
 	}
 	if plan.ManagedAuth != nil && state.ManagedAuth != nil {
-		return !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) ||
-			!setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes)
+		if !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) {
+			return true
+		}
+		if !plan.ManagedAuth.Scopes.IsUnknown() && !setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes) {
+			return true
+		}
+		return false
 	}
 	if plan.CustomAuth != nil && state.CustomAuth != nil {
 		return !setsEqual(plan.CustomAuth.RestrictToFollowingTools, state.CustomAuth.RestrictToFollowingTools)
