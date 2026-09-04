@@ -114,15 +114,7 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional:            true,
 				MarkdownDescription: "Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `custom_auth` forces replacement.",
 				Attributes: map[string]schema.Attribute{
-					"restrict_to_following_tools": schema.SetAttribute{
-						Optional:            true,
-						Computed:            true,
-						ElementType:         types.StringType,
-						MarkdownDescription: "Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.",
-						PlanModifiers: []planmodifier.Set{
-							setplanmodifier.UseStateForUnknown(),
-						},
-					},
+					"restrict_to_following_tools": restrictToFollowingToolsAttribute(),
 					"scopes": schema.SetAttribute{
 						Optional:            true,
 						Computed:            true,
@@ -152,15 +144,7 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 						ElementType:         types.StringType,
 						MarkdownDescription: "Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.11 or later is required.",
 					},
-					"restrict_to_following_tools": schema.SetAttribute{
-						Optional:            true,
-						Computed:            true,
-						ElementType:         types.StringType,
-						MarkdownDescription: "Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.",
-						PlanModifiers: []planmodifier.Set{
-							setplanmodifier.UseStateForUnknown(),
-						},
-					},
+					"restrict_to_following_tools": restrictToFollowingToolsAttribute(),
 				},
 			},
 			"auth_scheme": schema.StringAttribute{
@@ -191,6 +175,18 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+		},
+	}
+}
+
+func restrictToFollowingToolsAttribute() schema.SetAttribute {
+	return schema.SetAttribute{
+		Optional:            true,
+		Computed:            true,
+		ElementType:         types.StringType,
+		MarkdownDescription: "Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.",
+		PlanModifiers: []planmodifier.Set{
+			setplanmodifier.UseStateForUnknown(),
 		},
 	}
 }
@@ -519,17 +515,15 @@ func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
 	if !plan.Name.IsUnknown() && !plan.Name.Equal(state.Name) {
 		return true
 	}
+	planTools := plan.restrictToFollowingTools()
+	if !planTools.IsUnknown() && !setsEqual(planTools, state.restrictToFollowingTools()) {
+		return true
+	}
 	if plan.ManagedAuth != nil && state.ManagedAuth != nil {
-		if !plan.ManagedAuth.RestrictToFollowingTools.IsUnknown() && !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) {
-			return true
-		}
-		if !plan.ManagedAuth.Scopes.IsUnknown() && !setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes) {
-			return true
-		}
-		return false
+		return !plan.ManagedAuth.Scopes.IsUnknown() && !setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes)
 	}
 	if plan.CustomAuth != nil && state.CustomAuth != nil {
-		return !plan.CustomAuth.RestrictToFollowingTools.IsUnknown() && !setsEqual(plan.CustomAuth.RestrictToFollowingTools, state.CustomAuth.RestrictToFollowingTools)
+		return false
 	}
 	return true
 }

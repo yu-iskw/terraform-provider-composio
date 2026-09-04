@@ -250,6 +250,24 @@ func TestAuthConfigPatchNeededIgnoresUnknownComputedName(t *testing.T) {
 	}
 }
 
+func TestAuthConfigPatchNeededCustomToolsChange(t *testing.T) {
+	nullSet := types.SetNull(types.StringType)
+	state := authConfigResourceModel{
+		CustomAuth: &customAuthModel{RestrictToFollowingTools: nullSet},
+	}
+	plan := authConfigResourceModel{
+		Enabled:    types.BoolValue(false),
+		CustomAuth: &customAuthModel{RestrictToFollowingTools: nullSet},
+	}
+	if authConfigPatchNeeded(plan, state) {
+		t.Fatal("custom enabled-only change must not PATCH auth config")
+	}
+	plan.CustomAuth.RestrictToFollowingTools = types.SetValueMust(types.StringType, []attr.Value{types.StringValue("GITHUB_GET_ISSUE")})
+	if !authConfigPatchNeeded(plan, state) {
+		t.Fatal("custom tools change must PATCH")
+	}
+}
+
 func TestApplyRemoteKeepsConfiguredToolkitSlugCasing(t *testing.T) {
 	m := authConfigResourceModel{ToolkitSlug: types.StringValue("GITHUB")}
 	m.applyRemote(models.AuthConfig{
