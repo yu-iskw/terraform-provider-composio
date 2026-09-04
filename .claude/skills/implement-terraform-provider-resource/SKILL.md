@@ -1,22 +1,22 @@
 ---
 name: implement-terraform-provider-resource
-description: Implement Terraform resources and data sources in `internal/provider` with testing aligned to this template.
+description: Implement Terraform resources and data sources in `internal/provider` with testing aligned to this Composio provider.
 ---
 
 # Implement Terraform provider resource
 
 ## Description
 
-Implement a new Terraform resource or data source in `internal/provider` using `hashicorp/terraform-plugin-framework`, following patterns in this repository (for example `resource_example_item.go`, `data_source_example_item.go`, and the API client in `internal/your_service`).
+Implement a new Terraform resource or data source in `internal/provider` using `hashicorp/terraform-plugin-framework`, following patterns in this repository (for example `resource_auth_config.go`, `data_source_toolkit.go`, and the API client in `internal/composio/api`).
 
 ## Input
 
 The user should provide:
 
 1. **Type**: Resource or data source.
-2. **Terraform type name suffix** (e.g., `widget` → `template_widget` when `ProviderTypeName` is `template`).
+2. **Terraform type name suffix** (e.g., `widget` → `composio_widget` when `ProviderTypeName` is `composio`).
 3. **Schema**: Attributes (name, type, required / optional / computed).
-4. **Client operations**: Methods on your API client (replace or extend `yourservice.Client` in `internal/your_service`).
+4. **Client operations**: Methods on `*api.Client` in `internal/composio/api`.
 
 ## Workflow
 
@@ -26,7 +26,7 @@ The user should provide:
 - **Model**: Go struct with `tfsdk` tags; use `types.String`, `types.Bool`, etc.
 - **Interfaces**: Implement `resource.Resource` (+ `Configure`, `ImportState` as needed) or `datasource.DataSource` (+ `Configure` as needed).
 - **Schema**: Define in `Schema`; use clear descriptions.
-- **Configure**: Read `*yourservice.Client` (or your client type) from `req.ProviderData`, matching `internal/provider/provider.go` `Configure`.
+- **Configure**: Read `*api.Client` from `req.ProviderData`, matching `internal/provider/provider.go` `Configure`.
 - **CRUD / read**: Implement lifecycle methods; surface errors with `resp.Diagnostics`.
 
 ### 2. Unit tests
@@ -36,7 +36,7 @@ The user should provide:
 ### 3. Acceptance tests (optional)
 
 - Use `isIntegrationTestMode()` and `testAccPreCheck(t)`.
-- Use `testAccProtoV6ProviderFactories` with provider key `template`.
+- Use `testAccProtoV6ProviderFactories` with provider key `composio`.
 - Prefer small `.tf` fixtures under `internal/provider/acc_tests/` when you add them.
 - Use `resource.Test` from `github.com/hashicorp/terraform-plugin-testing/helper/resource`.
 
@@ -50,7 +50,7 @@ package provider
 import (
     "context"
 
-    "github.com/example/terraform-provider-template/internal/your_service"
+    "github.com/yu-iskw/terraform-provider-composio/internal/composio/api"
     "github.com/hashicorp/terraform-plugin-framework/resource"
     "github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -58,7 +58,7 @@ import (
 var _ resource.Resource = &widgetResource{}
 
 type widgetResource struct {
-    client *yourservice.Client
+    client *api.Client
 }
 
 type widgetResourceModel struct {
@@ -81,7 +81,7 @@ func TestAccWidget_basic(t *testing.T) {
             {
                 Config: testAccWidgetConfigBasic,
                 Check: resource.ComposeTestCheckFunc(
-                    resource.TestCheckResourceAttr("template_widget.test", "name", "value"),
+                    resource.TestCheckResourceAttr("composio_widget.test", "name", "value"),
                 ),
             },
         },

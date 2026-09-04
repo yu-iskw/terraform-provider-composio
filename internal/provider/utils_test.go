@@ -45,17 +45,17 @@ func TestReadMarkdownDescriptionEmbedded(t *testing.T) {
 	}{
 		{
 			name:     "resource with internal/provider prefix",
-			filename: "internal/provider/docs/resources/example_item.md",
+			filename: "internal/provider/docs/resources/auth_config.md",
 			wantErr:  false,
 		},
 		{
 			name:     "resource with docs prefix",
-			filename: "docs/resources/example_item.md",
+			filename: "docs/resources/auth_config.md",
 			wantErr:  false,
 		},
 		{
 			name:     "data source",
-			filename: "internal/provider/docs/data_sources/example_item.md",
+			filename: "internal/provider/docs/data_sources/toolkit.md",
 			wantErr:  false,
 		},
 		{

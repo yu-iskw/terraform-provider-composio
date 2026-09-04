@@ -38,11 +38,6 @@ func (v ValidateNonEmptyString) MarkdownDescription(ctx context.Context) string 
 // ValidateString performs the validation.
 func (v ValidateNonEmptyString) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
-		resp.Diagnostics.AddAttributeError(
-			req.Path,
-			"Invalid String Value",
-			"String cannot be null or unknown",
-		)
 		return
 	}
 

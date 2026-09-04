@@ -1,8 +1,11 @@
-provider "template" {
-  endpoint = "https://api.example.com"
-  api_key  = "example-api-key"
+provider "composio" {
+  # api_key     = var.composio_api_key
+  # org_api_key = var.composio_org_api_key
 
-  # Optional: tune HTTP client (defaults: 10 concurrent, 10 RPS)
-  # max_concurrent_requests = 5
-  # requests_per_second     = 20.5
+  # Optional. Defaults to https://backend.composio.dev
+  # endpoint = "https://backend.composio.dev"
+
+  # Optional advanced controls
+  # max_concurrent_requests = 8
+  # request_timeout         = "30s"
 }

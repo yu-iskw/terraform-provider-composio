@@ -9,14 +9,13 @@ import (
 )
 
 const testAccExampleItemBasic = `
-provider "template" {
-  endpoint = "https://api.example.com"
-  api_key  = "acceptance-test-key"
+provider "composio" {
+  api_key = "acceptance-test-key"
 }
 
-resource "template_example_item" "test" {
-  name        = "acceptance-example"
-  description = "from acceptance test boilerplate"
+resource "composio_auth_config" "test" {
+  toolkit_slug = "github"
+  managed_auth = {}
 }
 `
 
@@ -32,11 +31,11 @@ func TestAccExampleItem_basic(t *testing.T) {
 			{
 				Config: testAccExampleItemBasic,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("template_example_item.test", "name", "acceptance-example"),
+					resource.TestCheckResourceAttr("composio_auth_config.test", "toolkit_slug", "github"),
 				),
 			},
 			{
-				ResourceName:      "template_example_item.test",
+				ResourceName:      "composio_auth_config.test",
 				ImportState:       true,
 				ImportStateVerify: true,
 			},

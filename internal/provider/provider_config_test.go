@@ -21,28 +21,31 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 )
 
-func TestProviderSchemaUsesGenericConfiguration(t *testing.T) {
+func TestProviderSchemaUsesComposioConfiguration(t *testing.T) {
 	p := New("test")()
 
 	var resp provider.SchemaResponse
 	p.Schema(context.Background(), provider.SchemaRequest{}, &resp)
 
-	if _, ok := resp.Schema.Attributes["endpoint"]; !ok {
-		t.Fatal("expected provider schema to include endpoint")
+	for _, name := range []string{"endpoint", "api_key", "org_api_key", "max_concurrent_requests", "request_timeout"} {
+		if _, ok := resp.Schema.Attributes[name]; !ok {
+			t.Fatalf("expected provider schema to include %s", name)
+		}
 	}
-	if _, ok := resp.Schema.Attributes["api_key"]; !ok {
-		t.Fatal("expected provider schema to include api_key")
-	}
-	if _, ok := resp.Schema.Attributes["max_concurrent_requests"]; !ok {
-		t.Fatal("expected provider schema to include max_concurrent_requests")
-	}
-	if _, ok := resp.Schema.Attributes["requests_per_second"]; !ok {
-		t.Fatal("expected provider schema to include requests_per_second")
-	}
-	if _, ok := resp.Schema.Attributes["host"]; ok {
-		t.Fatal("did not expect provider schema to include host")
+	if _, ok := resp.Schema.Attributes["requests_per_second"]; ok {
+		t.Fatal("did not expect requests_per_second")
 	}
 	if _, ok := resp.Schema.Attributes["token"]; ok {
-		t.Fatal("did not expect provider schema to include token")
+		t.Fatal("did not expect token")
+	}
+}
+
+func TestProviderRegistersAuthConfigAndToolkit(t *testing.T) {
+	p := New("test")()
+	if got := len(p.Resources(context.Background())); got != 1 {
+		t.Fatalf("resources = %d", got)
+	}
+	if got := len(p.DataSources(context.Background())); got != 1 {
+		t.Fatalf("data sources = %d", got)
 	}
 }

@@ -23,12 +23,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
-// testAccProtoV6ProviderFactories are used to instantiate a provider during
-// acceptance testing. The factory function will be invoked for every Terraform
-// CLI command executed to create a provider server to which the CLI can
-// reattach.
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
-	"template": providerserver.NewProtocol6WithError(New("test")()),
+	"composio": providerserver.NewProtocol6WithError(New("test")()),
+}
+
+func TestAccProviderFactories(t *testing.T) {
+	if _, ok := testAccProtoV6ProviderFactories["composio"]; !ok {
+		t.Fatal("expected composio provider factory")
+	}
 }
 
 func testAccPreCheck(t *testing.T) {
@@ -43,8 +45,8 @@ func TestProviderMetadata(t *testing.T) {
 	var resp provider.MetadataResponse
 	p.Metadata(context.Background(), provider.MetadataRequest{}, &resp)
 
-	if resp.TypeName != "template" {
-		t.Fatalf("expected provider type name template, got %q", resp.TypeName)
+	if resp.TypeName != "composio" {
+		t.Fatalf("expected provider type name composio, got %q", resp.TypeName)
 	}
 
 	if resp.Version != "test" {

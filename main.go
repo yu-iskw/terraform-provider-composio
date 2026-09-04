@@ -19,8 +19,8 @@ import (
 	"flag"
 	"log"
 
-	"github.com/example/terraform-provider-template/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/yu-iskw/terraform-provider-composio/internal/provider"
 )
 
 // Run "go generate" to format example terraform files and generate the docs for the registry/website
@@ -50,7 +50,7 @@ func main() {
 
 	opts := providerserver.ServeOpts{
 		// TODO: Update this string with the published name of your provider.
-		Address: "registry.terraform.io/example/template",
+		Address: "registry.terraform.io/yu-iskw/composio",
 		Debug:   debug,
 	}
 

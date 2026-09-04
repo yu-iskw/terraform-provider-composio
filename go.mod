@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module github.com/example/terraform-provider-template
+module github.com/yu-iskw/terraform-provider-composio
 
 go 1.25.10
 
@@ -22,7 +22,6 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	golang.org/x/sync v0.22.0
-	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.48.0
 )
 
