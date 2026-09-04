@@ -116,8 +116,12 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Attributes: map[string]schema.Attribute{
 					"restrict_to_following_tools": schema.SetAttribute{
 						Optional:            true,
+						Computed:            true,
 						ElementType:         types.StringType,
-						MarkdownDescription: "Tool slugs this auth config may use. Order is not significant.",
+						MarkdownDescription: "Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.",
+						PlanModifiers: []planmodifier.Set{
+							setplanmodifier.UseStateForUnknown(),
+						},
 					},
 					"scopes": schema.SetAttribute{
 						Optional:            true,
@@ -150,8 +154,12 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 					},
 					"restrict_to_following_tools": schema.SetAttribute{
 						Optional:            true,
+						Computed:            true,
 						ElementType:         types.StringType,
-						MarkdownDescription: "Tool slugs this auth config may use. Order is not significant.",
+						MarkdownDescription: "Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.",
+						PlanModifiers: []planmodifier.Set{
+							setplanmodifier.UseStateForUnknown(),
+						},
 					},
 				},
 			},
@@ -512,7 +520,7 @@ func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
 		return true
 	}
 	if plan.ManagedAuth != nil && state.ManagedAuth != nil {
-		if !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) {
+		if !plan.ManagedAuth.RestrictToFollowingTools.IsUnknown() && !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) {
 			return true
 		}
 		if !plan.ManagedAuth.Scopes.IsUnknown() && !setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes) {
@@ -521,7 +529,7 @@ func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
 		return false
 	}
 	if plan.CustomAuth != nil && state.CustomAuth != nil {
-		return !setsEqual(plan.CustomAuth.RestrictToFollowingTools, state.CustomAuth.RestrictToFollowingTools)
+		return !plan.CustomAuth.RestrictToFollowingTools.IsUnknown() && !setsEqual(plan.CustomAuth.RestrictToFollowingTools, state.CustomAuth.RestrictToFollowingTools)
 	}
 	return true
 }

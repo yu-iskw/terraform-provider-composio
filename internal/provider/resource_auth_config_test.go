@@ -106,6 +106,23 @@ func TestApplyRemoteKeepsOmittedToolsNull(t *testing.T) {
 	}
 }
 
+func TestApplyRemoteReadsRestrictTools(t *testing.T) {
+	m := authConfigResourceModel{ManagedAuth: &managedAuthModel{RestrictToFollowingTools: types.SetNull(types.StringType)}}
+	m.applyRemote(models.AuthConfig{
+		ID:                       "ac_tools",
+		IsComposioManaged:        true,
+		Status:                   models.AuthConfigStatusEnabled,
+		RestrictToFollowingTools: []string{"GITHUB_CREATE_ISSUE"},
+	})
+	var got []string
+	if diags := m.ManagedAuth.RestrictToFollowingTools.ElementsAs(context.Background(), &got, false); diags.HasError() {
+		t.Fatalf("tools: %v", diags)
+	}
+	if len(got) != 1 || got[0] != "GITHUB_CREATE_ISSUE" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
 func TestOptionalStringSetPreservesEmptyConfig(t *testing.T) {
 	empty := types.SetValueMust(types.StringType, []attr.Value{})
 	got := optionalStringSet(nil, empty)
@@ -227,6 +244,10 @@ func TestAuthConfigPatchNeededIgnoresUnknownComputedName(t *testing.T) {
 	if authConfigPatchNeeded(plan, state) {
 		t.Fatal("unknown computed name/scopes must not PATCH")
 	}
+	plan.ManagedAuth.RestrictToFollowingTools = types.SetUnknown(types.StringType)
+	if authConfigPatchNeeded(plan, state) {
+		t.Fatal("unknown computed restrict_to_following_tools must not PATCH")
+	}
 }
 
 func TestApplyRemoteKeepsConfiguredToolkitSlugCasing(t *testing.T) {
@@ -268,6 +289,25 @@ func TestUpdateInputOmitsNullRestrictTools(t *testing.T) {
 	}
 	if in.RestrictToFollowingTools != nil {
 		t.Fatal("null custom restrict_to_following_tools must be omitted from PATCH")
+	}
+}
+
+func TestUpdateInputClearsRestrictTools(t *testing.T) {
+	plan := authConfigResourceModel{
+		ManagedAuth: &managedAuthModel{
+			RestrictToFollowingTools: types.SetValueMust(types.StringType, []attr.Value{}),
+			Scopes:                   types.SetNull(types.StringType),
+		},
+	}
+	in, diags := updateInputFromModels(context.Background(), plan, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if in.RestrictToFollowingTools == nil {
+		t.Fatal("empty configured tools must be sent so the API can clear them")
+	}
+	if len(*in.RestrictToFollowingTools) != 0 {
+		t.Fatalf("tools = %#v", *in.RestrictToFollowingTools)
 	}
 }
 

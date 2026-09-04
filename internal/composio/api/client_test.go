@@ -505,6 +505,36 @@ func TestUpdateAuthConfigClearsScopes(t *testing.T) {
 	}
 }
 
+func TestUpdateAuthConfigClearsRestrictTools(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		raw, ok := body["restrict_to_following_tools"]
+		if !ok {
+			t.Error("restrict_to_following_tools omitted")
+			return
+		}
+		got, ok := raw.([]any)
+		if !ok || len(got) != 0 {
+			t.Errorf("restrict_to_following_tools = %#v", raw)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	empty := []string{}
+	if err := c.UpdateAuthConfig(context.Background(), "ac_123", UpdateAuthConfigInput{
+		Managed:                  true,
+		RestrictToFollowingTools: &empty,
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+}
+
 func TestCreateAuthConfigRequiresNestedID(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
