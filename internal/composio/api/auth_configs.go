@@ -123,7 +123,6 @@ type authConfigWire struct {
 	ID                       string          `json:"id"`
 	Name                     string          `json:"name"`
 	Status                   string          `json:"status"`
-	Type                     string          `json:"type"`
 	AuthScheme               string          `json:"auth_scheme"`
 	IsComposioManaged        bool            `json:"is_composio_managed"`
 	RestrictToFollowingTools []string        `json:"restrict_to_following_tools"`

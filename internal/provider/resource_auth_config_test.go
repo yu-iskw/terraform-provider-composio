@@ -76,14 +76,16 @@ func TestApplyRemoteCustom(t *testing.T) {
 	}
 }
 
-func TestFormatAPIError(t *testing.T) {
-	msg := formatAPIError(&api.APIError{
+func TestAPIErrorStringOmitsResponseBody(t *testing.T) {
+	msg := (&api.APIError{
 		StatusCode:   400,
+		Method:       "GET",
+		Path:         "/auth_configs/x",
 		Message:      "tool restriction is not valid for toolkit github",
 		RequestID:    "req_9",
 		Code:         "400",
 		ResponseBody: `{"client_secret":"shh"}`,
-	})
+	}).Error()
 	if !strings.Contains(msg, "tool restriction") || !strings.Contains(msg, "req_9") {
 		t.Fatalf("msg = %s", msg)
 	}

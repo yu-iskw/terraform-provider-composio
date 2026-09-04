@@ -16,7 +16,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -116,19 +115,9 @@ func (d *toolkitDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 }
 
 func (d *toolkitDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	client, ok := req.ProviderData.(*api.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type", fmt.Sprintf("Expected *api.Client, got: %T.", req.ProviderData))
-		return
-	}
-	if !client.HasProjectKey() {
-		resp.Diagnostics.AddError(
-			"Missing Project API Key",
-			"data.composio_toolkit requires `api_key` or COMPOSIO_API_KEY.",
-		)
+	client, diags := configureProjectClient(req.ProviderData, "data.composio_toolkit")
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() || client == nil {
 		return
 	}
 	d.client = client
@@ -143,7 +132,7 @@ func (d *toolkitDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	tk, err := d.client.GetToolkit(ctx, config.Slug.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read Composio toolkit", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to read Composio toolkit", err.Error())
 		return
 	}
 

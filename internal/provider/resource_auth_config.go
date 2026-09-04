@@ -16,11 +16,7 @@ package provider
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -188,19 +184,9 @@ func (r *authConfigResource) ValidateConfig(ctx context.Context, req resource.Va
 }
 
 func (r *authConfigResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-	client, ok := req.ProviderData.(*api.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Resource Configure Type", fmt.Sprintf("Expected *api.Client, got: %T.", req.ProviderData))
-		return
-	}
-	if !client.HasProjectKey() {
-		resp.Diagnostics.AddError(
-			"Missing Project API Key",
-			"composio_auth_config requires `api_key` or COMPOSIO_API_KEY.",
-		)
+	client, diags := configureProjectClient(req.ProviderData, "composio_auth_config")
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() || client == nil {
 		return
 	}
 	r.client = client
@@ -223,18 +209,18 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 
 	id, err := r.client.CreateAuthConfig(ctx, in)
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to create Composio auth config", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to create Composio auth config", err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(id))...)
 	if resp.Diagnostics.HasError() {
 		if delErr := r.client.DeleteAuthConfig(ctx, id); delErr != nil {
-			resp.Diagnostics.AddError("Unable to roll back Composio auth config after a state write failure", formatAPIError(delErr))
+			resp.Diagnostics.AddError("Unable to roll back Composio auth config after a state write failure", delErr.Error())
 		}
 		return
 	}
 	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
-		resp.Diagnostics.AddError("Unable to read Composio auth config after create", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to read Composio auth config after create", err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
@@ -253,7 +239,7 @@ func (r *authConfigResource) Read(ctx context.Context, req resource.ReadRequest,
 		return
 	}
 	if err != nil {
-		resp.Diagnostics.AddError("Unable to read Composio auth config", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to read Composio auth config", err.Error())
 		return
 	}
 	state.applyRemote(remote)
@@ -279,12 +265,12 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 			return
 		}
 		if err := r.client.UpdateAuthConfig(ctx, id, in); err != nil {
-			resp.Diagnostics.AddError("Unable to update Composio auth config", formatAPIError(err))
+			resp.Diagnostics.AddError("Unable to update Composio auth config", err.Error())
 			return
 		}
 	}
 	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
-		resp.Diagnostics.AddError("Unable to read Composio auth config after update", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to read Composio auth config after update", err.Error())
 		return
 	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
@@ -297,7 +283,7 @@ func (r *authConfigResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 	if err := r.client.DeleteAuthConfig(ctx, state.ID.ValueString()); err != nil {
-		resp.Diagnostics.AddError("Unable to delete Composio auth config", formatAPIError(err))
+		resp.Diagnostics.AddError("Unable to delete Composio auth config", err.Error())
 	}
 }
 
@@ -321,21 +307,17 @@ func (r *authConfigResource) ModifyPlan(ctx context.Context, req resource.Modify
 	}
 }
 
-func (r *authConfigResource) reconcileStatus(ctx context.Context, id string, enabled bool) error {
-	status := models.AuthConfigStatusEnabled
-	if !enabled {
-		status = models.AuthConfigStatusDisabled
-	}
-	return r.client.SetAuthConfigStatus(ctx, id, status)
-}
-
 func (r *authConfigResource) loadAfterWrite(ctx context.Context, id string, enabled bool, dest *authConfigResourceModel) error {
 	remote, err := r.client.GetAuthConfig(ctx, id)
 	if err != nil {
 		return err
 	}
 	if remote.Enabled() != enabled {
-		if err := r.reconcileStatus(ctx, id, enabled); err != nil {
+		status := models.AuthConfigStatusEnabled
+		if !enabled {
+			status = models.AuthConfigStatusDisabled
+		}
+		if err := r.client.SetAuthConfigStatus(ctx, id, status); err != nil {
 			return err
 		}
 		remote, err = r.client.GetAuthConfig(ctx, id)
@@ -508,37 +490,4 @@ func setsEqual(a, b types.Set) bool {
 		return true
 	}
 	return a.Equal(b)
-}
-
-func stringSet(values []string) types.Set {
-	if values == nil {
-		values = []string{}
-	}
-	elems := make([]attr.Value, 0, len(values))
-	for _, v := range values {
-		elems = append(elems, types.StringValue(v))
-	}
-	return types.SetValueMust(types.StringType, elems)
-}
-
-func formatAPIError(err error) string {
-	var apiErr *api.APIError
-	if !errors.As(err, &apiErr) {
-		return err.Error()
-	}
-	b := strings.Builder{}
-	b.WriteString(apiErr.Message)
-	b.WriteString("\n\n")
-	fmt.Fprintf(&b, "HTTP status: %d\n", apiErr.StatusCode)
-	if apiErr.RequestID != "" {
-		b.WriteString("Request ID: ")
-		b.WriteString(apiErr.RequestID)
-		b.WriteString("\n")
-	}
-	if apiErr.Code != "" {
-		b.WriteString("Error code: ")
-		b.WriteString(apiErr.Code)
-		b.WriteString("\n")
-	}
-	return strings.TrimSpace(b.String())
 }

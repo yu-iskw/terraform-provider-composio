@@ -64,7 +64,6 @@ type wireError struct {
 		Message      string          `json:"message"`
 		Code         json.RawMessage `json:"code"`
 		Slug         string          `json:"slug"`
-		Status       int             `json:"status"`
 		RequestID    string          `json:"request_id"`
 		SuggestedFix string          `json:"suggested_fix"`
 	} `json:"error"`
@@ -77,7 +76,7 @@ func parseAPIError(method, path string, status int, hdr http.Header, body []byte
 		StatusCode:   status,
 		Method:       method,
 		Path:         path,
-		RequestID:    firstHeader(hdr, "x-request-id", "X-Request-Id", "x-composio-request-id"),
+		RequestID:    firstHeader(hdr, "x-request-id", "x-composio-request-id"),
 		RetryAfter:   parseRetryAfter(hdr.Get("Retry-After")),
 		ResponseBody: redactJSON(clip(body, maxErrorBody)),
 	}
