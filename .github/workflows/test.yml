@@ -1,0 +1,157 @@
+# Copyright 2026 yu-iskw
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Terraform Provider testing workflow.
+name: Tests
+
+# This GitHub action runs your tests for each pull request and push.
+# Optionally, you can turn it on using a schedule for regular testing.
+on:
+  pull_request:
+    paths-ignore:
+      - README.md
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - README.md
+
+# Testing only needs permissions to read the repository contents.
+permissions: read-all
+
+jobs:
+  # Ensure project builds before running testing matrix
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Required: allow read access to the content for analysis.
+      contents: read
+      # Optional: allow read access to pull request. Use with `only-new-issues` option.
+      pull-requests: read
+      # Optional: Allow write access to checks to allow the action to annotate code in the PR.
+      checks: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v5.0.1
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: |
+          go mod download
+          go mod vendor
+      - run: go build -v .
+      - name: Run linters
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: latest
+
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v5.0.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: latest
+          terraform_wrapper: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go generate ./...
+      - name: git diff
+        run: |
+          git diff --compact-summary --exit-code || \
+            (echo; echo "Unexpected difference in directories after code generation. Run 'go generate ./...' command and commit."; exit 1)
+
+  # Run acceptance tests in a matrix with Terraform CLI versions
+  test:
+    name: Terraform Provider Acceptance Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # list whatever Terraform versions here you would like to support
+        terraform:
+          - 1.11.*
+          - 1.12.*
+          - 1.13.*
+          - 1.14.*
+          - 1.15.*
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v5.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ matrix.terraform }}
+          terraform_wrapper: false
+      - name: Download dependencies
+        run: |
+          go mod download
+      - name: Run tests
+        run: |
+          go test -v -cover ./internal/...
+      # TODO support integration test
+      # - env:
+      #     TF_ACC: "1"
+      #   run: go test -v -cover ./internal/provider/
+      #   timeout-minutes: 10
+
+  # Run gosec security scanner
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v5.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: |
+          go mod download
+      - run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+      - name: Run gosec Security Scanner
+        run: |
+          gosec ./internal/...
+
+  # Run deadcode scanner
+  deadcode:
+    name: deadcode
+    runs-on: ubuntu-latest
+    env:
+      GO111MODULE: on
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v5.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Download dependencies
+        run: |
+          go mod download
+      - name: Run Deadcode
+        run: |
+          go run golang.org/x/tools/cmd/deadcode -test ./internal/...

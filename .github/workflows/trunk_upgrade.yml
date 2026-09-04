@@ -1,0 +1,29 @@
+name: Upgrade Trunk
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Runs on the 1st day of every month (in the UTC timezone)
+    - cron: 0 0 1 * *
+
+permissions: read-all
+
+jobs:
+  trunk_upgrade:
+    name: Upgrade Trunk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # For trunk to create PRs
+      pull-requests: write # For trunk to create PRs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+      # >>> Install your own deps here (npm install, etc) <<<
+      # SEE https://github.com/trunk-io/trunk-action
+      - name: Trunk Upgrade
+        uses: trunk-io/trunk-action/upgrade@04ba50e7658c81db7356da96657e6e77f220bfa3 # v1
+        with:
+          signoff: true

@@ -1,0 +1,28 @@
+# Terraform Provider Implementation Guide
+
+Use the HashiCorp Terraform Plugin Framework patterns already present in `internal/provider`.
+
+## Provider
+
+- Keep provider configuration in `internal/provider/provider.go`.
+- Use framework `types` in Terraform-facing models.
+- Store shared API clients in `resp.ResourceData` and `resp.DataSourceData` (constructed in `Configure`, typically from `internal/your_service`).
+- Keep diagnostics actionable and attribute-specific when possible.
+
+## Resources
+
+- Put each resource in `internal/provider/resource_<name>.go`.
+- Implement `resource.Resource`, `resource.ResourceWithConfigure` when client data is needed, and `resource.ResourceWithImportState` when import is supported.
+- Keep schema names and behavior aligned with the underlying API.
+- Test observable Terraform state behavior.
+
+## Data Sources
+
+- Put each data source in `internal/provider/data_source_<name>.go`.
+- Implement `datasource.DataSourceWithConfigure` when client data is needed.
+- Prefer deterministic tests using real in-process code.
+
+## Documentation
+
+- Keep examples in `examples/provider`, `examples/resources/<type>`, and `examples/data-sources/<type>`.
+- Run `go generate ./...` after schema or example changes.

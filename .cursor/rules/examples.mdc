@@ -1,0 +1,11 @@
+# Examples
+
+The `examples` directory contains runnable and documentation examples for the template provider.
+
+Documentation generation reads:
+
+- `examples/provider/provider.tf`
+- `examples/resources/<resource_name>/resource.tf`
+- `examples/data-sources/<data_source_name>/data-source.tf`
+
+Keep examples minimal and generic unless the repository has been adapted for a real provider.

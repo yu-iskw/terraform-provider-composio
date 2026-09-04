@@ -1,0 +1,74 @@
+// Copyright 2026 yu-iskw
+// Boilerplate: copy into internal/provider and rename types for your data source.
+package provider
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+var (
+	_ datasource.DataSource              = &exampleDataSource{}
+	_ datasource.DataSourceWithConfigure = &exampleDataSource{}
+)
+
+func NewExampleDataSource() datasource.DataSource {
+	return &exampleDataSource{}
+}
+
+type exampleDataSource struct {
+	client *yourservice.Client
+}
+
+type exampleDataSourceModel struct {
+	ID   types.String `tfsdk:"id"`
+	Name types.String `tfsdk:"name"`
+}
+
+func (d *exampleDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_example"
+}
+
+func (d *exampleDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"id": schema.StringAttribute{
+				Computed: true,
+			},
+			"name": schema.StringAttribute{
+				Required: true,
+			},
+		},
+	}
+}
+
+func (d *exampleDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+	client, ok := req.ProviderData.(*yourservice.Client)
+	if !ok {
+		resp.Diagnostics.AddError("Unexpected Data Source Configure Type", fmt.Sprintf("Expected *yourservice.Client, got: %T", req.ProviderData))
+		return
+	}
+	d.client = client
+}
+
+func (d *exampleDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var state exampleDataSourceModel
+	diags := req.Config.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// TODO: call your API using d.client
+	state.ID = types.StringValue("example-id")
+
+	diags = resp.State.Set(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+}
