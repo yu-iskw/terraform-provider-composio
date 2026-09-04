@@ -16,6 +16,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -295,14 +296,18 @@ func (r *authConfigResource) ModifyPlan(ctx context.Context, req resource.Modify
 	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
 		return
 	}
-	var state authConfigResourceModel
-	var plan authConfigResourceModel
-	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
-	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	var stateManaged, stateCustom, planManaged, planCustom types.Object
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("managed_auth"), &stateManaged)...)
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("custom_auth"), &stateCustom)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("managed_auth"), &planManaged)...)
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, path.Root("custom_auth"), &planCustom)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	if (state.ManagedAuth != nil) != (plan.ManagedAuth != nil) {
+	if stateManaged.IsUnknown() || planManaged.IsUnknown() || stateCustom.IsUnknown() || planCustom.IsUnknown() {
+		return
+	}
+	if stateManaged.IsNull() != planManaged.IsNull() {
 		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("managed_auth"), path.Root("custom_auth"))
 	}
 }
@@ -365,9 +370,11 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		in.Name = &name
 	}
 	if plan.ManagedAuth != nil {
-		tools, d := setToStrings(ctx, plan.ManagedAuth.RestrictToFollowingTools)
-		diags.Append(d...)
-		in.RestrictToFollowingTools = &tools
+		if !plan.ManagedAuth.RestrictToFollowingTools.IsNull() && !plan.ManagedAuth.RestrictToFollowingTools.IsUnknown() {
+			tools, d := setToStrings(ctx, plan.ManagedAuth.RestrictToFollowingTools)
+			diags.Append(d...)
+			in.RestrictToFollowingTools = &tools
+		}
 		if !plan.ManagedAuth.Scopes.IsNull() && !plan.ManagedAuth.Scopes.IsUnknown() {
 			scopes, d := setToStrings(ctx, plan.ManagedAuth.Scopes)
 			diags.Append(d...)
@@ -375,9 +382,11 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		}
 	}
 	if plan.CustomAuth != nil {
-		tools, d := setToStrings(ctx, plan.CustomAuth.RestrictToFollowingTools)
-		diags.Append(d...)
-		in.RestrictToFollowingTools = &tools
+		if !plan.CustomAuth.RestrictToFollowingTools.IsNull() && !plan.CustomAuth.RestrictToFollowingTools.IsUnknown() {
+			tools, d := setToStrings(ctx, plan.CustomAuth.RestrictToFollowingTools)
+			diags.Append(d...)
+			in.RestrictToFollowingTools = &tools
+		}
 		creds, d := credentialsFromConfig(ctx, config.CustomAuth)
 		diags.Append(d...)
 		if len(creds) > 0 {
@@ -409,7 +418,12 @@ func setToStrings(ctx context.Context, s types.Set) ([]string, diag.Diagnostics)
 
 func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	m.ID = types.StringValue(remote.ID)
-	m.ToolkitSlug = types.StringValue(remote.ToolkitSlug)
+	if remote.ToolkitSlug != "" {
+		configured := m.ToolkitSlug.ValueString()
+		if configured == "" || !strings.EqualFold(configured, remote.ToolkitSlug) {
+			m.ToolkitSlug = types.StringValue(remote.ToolkitSlug)
+		}
+	}
 	m.Name = types.StringValue(remote.Name)
 	m.Enabled = types.BoolValue(remote.Enabled())
 	m.AuthScheme = types.StringValue(remote.AuthScheme)

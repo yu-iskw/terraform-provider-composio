@@ -61,3 +61,15 @@ func TestBackoffClampsRetryAfter(t *testing.T) {
 		t.Fatalf("got %s", d)
 	}
 }
+
+func TestRedactRunsBeforeErrorBodyClip(t *testing.T) {
+	secret := strings.Repeat("s", 5000)
+	body := []byte(`{"error":{"message":"bad","code":400},"client_secret":"` + secret + `"}`)
+	err := parseAPIError("GET", "/x", 400, nil, body)
+	if strings.Contains(err.ResponseBody, "ssssss") {
+		t.Fatal("secret survived into clipped error body")
+	}
+	if !strings.Contains(err.ResponseBody, redacted) {
+		t.Fatalf("expected redaction in %s", err.ResponseBody)
+	}
+}

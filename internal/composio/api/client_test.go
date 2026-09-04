@@ -305,7 +305,7 @@ func TestSetAuthConfigStatusPath(t *testing.T) {
 
 func TestToolkitAuthSchemesFromObjects(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, `{"slug":"notion","name":"Notion","auth_schemes":[{"mode":"OAUTH2"},{"mode":"API_KEY"}]}`)
+		writeJSON(t, w, `{"slug":"notion","name":"Notion","auth_config_details":[{"mode":"OAUTH2"},{"mode":"API_KEY"}]}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -479,6 +479,19 @@ func TestUpdateAuthConfigClearsScopes(t *testing.T) {
 		Scopes:  &empty,
 	}); err != nil {
 		t.Fatalf("Update: %v", err)
+	}
+}
+
+func TestCreateAuthConfigRequiresNestedID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		writeJSON(t, w, `{"id":"ac_top"}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	if _, err := c.CreateAuthConfig(context.Background(), CreateAuthConfigInput{ToolkitSlug: "github", Managed: true}); err == nil {
+		t.Fatal("top-level id must not be accepted")
 	}
 }
 

@@ -16,7 +16,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/url"
 
@@ -33,19 +32,16 @@ func (c *Client) GetToolkit(ctx context.Context, slug string) (models.Toolkit, e
 }
 
 type toolkitWire struct {
-	Slug              string          `json:"slug"`
-	Name              string          `json:"name"`
-	Description       string          `json:"description"`
-	Logo              string          `json:"logo"`
-	Type              string          `json:"type"`
-	NoAuth            bool            `json:"no_auth"`
-	AuthSchemes       json.RawMessage `json:"auth_schemes"`
-	AuthConfigDetails json.RawMessage `json:"auth_config_details"`
-	ToolsCount        int             `json:"tools_count"`
-	TriggersCount     int             `json:"triggers_count"`
-	Version           string          `json:"version"`
-	AppURL            string          `json:"app_url"`
-	Meta              *toolkitMeta    `json:"meta"`
+	Slug              string            `json:"slug"`
+	Name              string            `json:"name"`
+	Type              string            `json:"type"`
+	NoAuth            bool              `json:"no_auth"`
+	AuthConfigDetails []toolkitAuthMode `json:"auth_config_details"`
+	Meta              *toolkitMeta      `json:"meta"`
+}
+
+type toolkitAuthMode struct {
+	Mode string `json:"mode"`
 }
 
 type toolkitMeta struct {
@@ -58,76 +54,27 @@ type toolkitMeta struct {
 }
 
 func (w toolkitWire) toModel() models.Toolkit {
-	desc := w.Description
-	logo := w.Logo
-	appURL := w.AppURL
-	tools := w.ToolsCount
-	triggers := w.TriggersCount
-	version := w.Version
+	tk := models.Toolkit{
+		Slug:   w.Slug,
+		Name:   w.Name,
+		Type:   w.Type,
+		NoAuth: w.NoAuth,
+	}
 	if w.Meta != nil {
-		desc = firstNonEmpty(desc, w.Meta.Description)
-		logo = firstNonEmpty(logo, w.Meta.Logo)
-		appURL = firstNonEmpty(appURL, w.Meta.AppURL)
-		if tools == 0 {
-			tools = w.Meta.ToolsCount
-		}
-		if triggers == 0 {
-			triggers = w.Meta.TriggersCount
-		}
-		version = firstNonEmpty(version, w.Meta.Version)
+		tk.Description = w.Meta.Description
+		tk.Logo = w.Meta.Logo
+		tk.AppURL = w.Meta.AppURL
+		tk.ToolsCount = w.Meta.ToolsCount
+		tk.TriggersCount = w.Meta.TriggersCount
+		tk.Version = w.Meta.Version
 	}
-	schemes := parseAuthSchemes(w.AuthSchemes)
-	if len(schemes) == 0 {
-		schemes = parseAuthSchemes(w.AuthConfigDetails)
-	}
-	return models.Toolkit{
-		Slug:          w.Slug,
-		Name:          w.Name,
-		Description:   desc,
-		Logo:          logo,
-		Type:          w.Type,
-		NoAuth:        w.NoAuth,
-		AuthSchemes:   schemes,
-		ToolsCount:    tools,
-		TriggersCount: triggers,
-		Version:       version,
-		AppURL:        appURL,
-	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func parseAuthSchemes(raw json.RawMessage) []string {
-	if len(raw) == 0 {
-		return nil
-	}
-	var strings []string
-	if json.Unmarshal(raw, &strings) == nil {
-		return strings
-	}
-	var objs []struct {
-		Mode string `json:"mode"`
-		Name string `json:"name"`
-	}
-	if json.Unmarshal(raw, &objs) == nil {
-		out := make([]string, 0, len(objs))
-		for _, o := range objs {
-			if o.Mode != "" {
-				out = append(out, o.Mode)
-				continue
-			}
-			if o.Name != "" {
-				out = append(out, o.Name)
+	if len(w.AuthConfigDetails) > 0 {
+		tk.AuthSchemes = make([]string, 0, len(w.AuthConfigDetails))
+		for _, d := range w.AuthConfigDetails {
+			if d.Mode != "" {
+				tk.AuthSchemes = append(tk.AuthSchemes, d.Mode)
 			}
 		}
-		return out
 	}
-	return nil
+	return tk
 }

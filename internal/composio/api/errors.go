@@ -67,8 +67,6 @@ type wireError struct {
 		RequestID    string          `json:"request_id"`
 		SuggestedFix string          `json:"suggested_fix"`
 	} `json:"error"`
-	Message   string `json:"message"`
-	RequestID string `json:"request_id"`
 }
 
 func parseAPIError(method, path string, status int, hdr http.Header, body []byte) *APIError {
@@ -78,15 +76,13 @@ func parseAPIError(method, path string, status int, hdr http.Header, body []byte
 		Path:         path,
 		RequestID:    firstHeader(hdr, "x-request-id", "x-composio-request-id"),
 		RetryAfter:   parseRetryAfter(hdr.Get("Retry-After")),
-		ResponseBody: redactJSON(clip(body, maxErrorBody)),
+		ResponseBody: clipString(redactJSON(body), maxErrorBody),
 	}
 
 	var wire wireError
 	if json.Unmarshal(body, &wire) == nil {
 		if wire.Error.Message != "" {
 			apiErr.Message = wire.Error.Message
-		} else if wire.Message != "" {
-			apiErr.Message = wire.Message
 		}
 		if code := rawCode(wire.Error.Code); code != "" {
 			apiErr.Code = code
@@ -95,8 +91,6 @@ func parseAPIError(method, path string, status int, hdr http.Header, body []byte
 		}
 		if wire.Error.RequestID != "" {
 			apiErr.RequestID = wire.Error.RequestID
-		} else if wire.RequestID != "" {
-			apiErr.RequestID = wire.RequestID
 		}
 		if wire.Error.SuggestedFix != "" && apiErr.Message != "" {
 			apiErr.Message = apiErr.Message + ". " + wire.Error.SuggestedFix
@@ -112,15 +106,15 @@ func rawCode(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
 	}
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return s
-	}
 	var n json.Number
 	if json.Unmarshal(raw, &n) == nil {
 		return n.String()
 	}
-	return strings.TrimSpace(string(raw))
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return ""
 }
 
 func firstHeader(hdr http.Header, keys ...string) string {
@@ -150,9 +144,9 @@ func parseRetryAfter(v string) time.Duration {
 	return 0
 }
 
-func clip(b []byte, n int) []byte {
-	if len(b) <= n {
-		return b
+func clipString(s string, n int) string {
+	if len(s) <= n {
+		return s
 	}
-	return b[:n]
+	return s[:n]
 }

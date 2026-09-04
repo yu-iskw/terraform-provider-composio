@@ -25,6 +25,13 @@ import (
 	"github.com/yu-iskw/terraform-provider-composio/internal/composio/models"
 )
 
+const (
+	authConfigCreateManaged = "use_composio_managed_auth"
+	authConfigCreateCustom  = "use_custom_auth"
+	authConfigUpdateDefault = "default"
+	authConfigUpdateCustom  = "custom"
+)
+
 type CreateAuthConfigInput struct {
 	ToolkitSlug              string
 	Name                     string
@@ -47,11 +54,11 @@ func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput)
 	req := createAuthConfigRequest{
 		Toolkit: toolkitRef{Slug: in.ToolkitSlug},
 		AuthConfig: createAuthConfigBody{
-			Type: models.AuthConfigCreateCustom,
+			Type: authConfigCreateCustom,
 		},
 	}
 	if in.Managed {
-		req.AuthConfig.Type = models.AuthConfigCreateManaged
+		req.AuthConfig.Type = authConfigCreateManaged
 		if len(in.Scopes) > 0 {
 			req.AuthConfig.Credentials = map[string]any{"scopes": in.Scopes}
 		}
@@ -89,9 +96,9 @@ func (c *Client) GetAuthConfig(ctx context.Context, id string) (models.AuthConfi
 }
 
 func (c *Client) UpdateAuthConfig(ctx context.Context, id string, in UpdateAuthConfigInput) error {
-	body := updateAuthConfigBody{Type: models.AuthConfigUpdateCustom}
+	body := updateAuthConfigBody{Type: authConfigUpdateCustom}
 	if in.Managed {
-		body.Type = models.AuthConfigUpdateDefault
+		body.Type = authConfigUpdateDefault
 		if in.Scopes != nil {
 			joined := strings.Join(*in.Scopes, ",")
 			body.Scopes = &joined
@@ -128,7 +135,9 @@ type authConfigWire struct {
 	RestrictToFollowingTools []string        `json:"restrict_to_following_tools"`
 	CreatedAt                string          `json:"created_at"`
 	Credentials              json.RawMessage `json:"credentials"`
-	Toolkit                  json.RawMessage `json:"toolkit"`
+	Toolkit                  struct {
+		Slug string `json:"slug"`
+	} `json:"toolkit"`
 }
 
 type toolkitRef struct {
@@ -157,20 +166,6 @@ type updateAuthConfigBody struct {
 }
 
 func (w authConfigWire) toModel() models.AuthConfig {
-	slug := ""
-	if len(w.Toolkit) > 0 {
-		var obj struct {
-			Slug string `json:"slug"`
-		}
-		if json.Unmarshal(w.Toolkit, &obj) == nil && obj.Slug != "" {
-			slug = obj.Slug
-		} else {
-			var s string
-			if json.Unmarshal(w.Toolkit, &s) == nil {
-				slug = s
-			}
-		}
-	}
 	scopes, scopesSet := parseCredentialScopes(w.Credentials)
 	var scopePtr *[]string
 	if scopesSet {
@@ -179,7 +174,7 @@ func (w authConfigWire) toModel() models.AuthConfig {
 	return models.AuthConfig{
 		ID:                       w.ID,
 		Name:                     w.Name,
-		ToolkitSlug:              slug,
+		ToolkitSlug:              w.Toolkit.Slug,
 		AuthScheme:               w.AuthScheme,
 		IsComposioManaged:        w.IsComposioManaged,
 		Status:                   w.Status,
@@ -191,19 +186,17 @@ func (w authConfigWire) toModel() models.AuthConfig {
 
 func authConfigIDFromCreate(raw json.RawMessage) (string, error) {
 	var wrap struct {
-		AuthConfig authConfigWire `json:"auth_config"`
-		ID         string         `json:"id"`
+		AuthConfig struct {
+			ID string `json:"id"`
+		} `json:"auth_config"`
 	}
 	if err := json.Unmarshal(raw, &wrap); err != nil {
 		return "", fmt.Errorf("decode create auth config: %w", err)
 	}
-	if wrap.AuthConfig.ID != "" {
-		return wrap.AuthConfig.ID, nil
+	if wrap.AuthConfig.ID == "" {
+		return "", fmt.Errorf("create auth config response missing auth_config.id")
 	}
-	if wrap.ID != "" {
-		return wrap.ID, nil
-	}
-	return "", fmt.Errorf("create auth config response missing id")
+	return wrap.AuthConfig.ID, nil
 }
 
 func stringMapToAny(in map[string]string) map[string]any {

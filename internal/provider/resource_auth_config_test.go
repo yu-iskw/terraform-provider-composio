@@ -200,6 +200,35 @@ func TestAuthConfigPatchNeededSkipsEnabledOnly(t *testing.T) {
 	}
 }
 
+func TestApplyRemoteKeepsConfiguredToolkitSlugCasing(t *testing.T) {
+	m := authConfigResourceModel{ToolkitSlug: types.StringValue("GITHUB")}
+	m.applyRemote(models.AuthConfig{
+		ID:                "ac_case",
+		ToolkitSlug:       "github",
+		IsComposioManaged: true,
+		Status:            models.AuthConfigStatusEnabled,
+	})
+	if m.ToolkitSlug.ValueString() != "GITHUB" {
+		t.Fatalf("configured casing must be kept, got %q", m.ToolkitSlug.ValueString())
+	}
+}
+
+func TestUpdateInputOmitsNullRestrictTools(t *testing.T) {
+	plan := authConfigResourceModel{
+		ManagedAuth: &managedAuthModel{
+			RestrictToFollowingTools: types.SetNull(types.StringType),
+			Scopes:                   types.SetNull(types.StringType),
+		},
+	}
+	in, diags := updateInputFromModels(context.Background(), plan, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if in.RestrictToFollowingTools != nil {
+		t.Fatal("null restrict_to_following_tools must be omitted from PATCH")
+	}
+}
+
 func TestUpdateInputClearsManagedScopes(t *testing.T) {
 	plan := authConfigResourceModel{
 		ManagedAuth: &managedAuthModel{

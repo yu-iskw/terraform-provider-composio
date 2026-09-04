@@ -17,12 +17,6 @@ package models
 const (
 	AuthConfigStatusEnabled  = "ENABLED"
 	AuthConfigStatusDisabled = "DISABLED"
-
-	AuthConfigCreateManaged = "use_composio_managed_auth"
-	AuthConfigCreateCustom  = "use_custom_auth"
-
-	AuthConfigUpdateDefault = "default"
-	AuthConfigUpdateCustom  = "custom"
 )
 
 type AuthConfig struct {
