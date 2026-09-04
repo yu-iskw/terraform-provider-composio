@@ -38,9 +38,9 @@ func TestIsRetryableMethod(t *testing.T) {
 }
 
 func TestRedactJSONByKey(t *testing.T) {
-	in := []byte(`{"client_secret":"shh","ok":"public","nested":{"password":"p"}}`)
+	in := []byte(`{"client_secret":"shh","ok":"public","nested":{"password":"p"},"x-api-key":"leak"}`)
 	out := redactJSON(in)
-	if strings.Contains(out, "shh") || strings.Contains(out, `"p"`) {
+	if strings.Contains(out, "shh") || strings.Contains(out, `"p"`) || strings.Contains(out, "leak") {
 		t.Fatalf("leaked: %s", out)
 	}
 	if !strings.Contains(out, "public") {

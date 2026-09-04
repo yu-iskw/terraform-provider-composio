@@ -16,6 +16,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -228,20 +229,10 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	if !plan.Enabled.ValueBool() {
-		if err := r.reconcileStatus(ctx, id, false); err != nil {
-			resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
-			return
-		}
-	}
-
-	remote, err := r.client.GetAuthConfig(ctx, id)
-	if err != nil {
+	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after create", formatAPIError(err))
 		return
 	}
-	plan.applyRemote(remote)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -285,23 +276,10 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 		resp.Diagnostics.AddError("Unable to update Composio auth config", formatAPIError(err))
 		return
 	}
-	remote, err := r.client.GetAuthConfig(ctx, id)
-	if err != nil {
+	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after update", formatAPIError(err))
 		return
 	}
-	if remote.Enabled() != plan.Enabled.ValueBool() {
-		if err := r.reconcileStatus(ctx, id, plan.Enabled.ValueBool()); err != nil {
-			resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
-			return
-		}
-		remote, err = r.client.GetAuthConfig(ctx, id)
-		if err != nil {
-			resp.Diagnostics.AddError("Unable to read Composio auth config after status change", formatAPIError(err))
-			return
-		}
-	}
-	plan.applyRemote(remote)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -342,6 +320,24 @@ func (r *authConfigResource) reconcileStatus(ctx context.Context, id string, ena
 		status = models.AuthConfigStatusDisabled
 	}
 	return r.client.SetAuthConfigStatus(ctx, id, status)
+}
+
+func (r *authConfigResource) loadAfterWrite(ctx context.Context, id string, enabled bool, dest *authConfigResourceModel) error {
+	remote, err := r.client.GetAuthConfig(ctx, id)
+	if err != nil {
+		return err
+	}
+	if remote.Enabled() != enabled {
+		if err := r.reconcileStatus(ctx, id, enabled); err != nil {
+			return err
+		}
+		remote, err = r.client.GetAuthConfig(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
+	dest.applyRemote(remote)
+	return nil
 }
 
 func createInputFromModels(ctx context.Context, plan, config authConfigResourceModel) (api.CreateAuthConfigInput, diag.Diagnostics) {
@@ -484,10 +480,7 @@ func stringSet(values []string) types.Set {
 
 func formatAPIError(err error) string {
 	var apiErr *api.APIError
-	if as, ok := err.(*api.APIError); ok {
-		apiErr = as
-	}
-	if apiErr == nil {
+	if !errors.As(err, &apiErr) {
 		return err.Error()
 	}
 	b := strings.Builder{}

@@ -32,9 +32,9 @@ var secretKeyNames = map[string]struct{}{
 	"refresh_token":       {},
 	"signing_secret":      {},
 	"token":               {},
-	"x-api-key":           {},
-	"x-org-api-key":       {},
-	"x-user-api-key":      {},
+	"x_api_key":           {},
+	"x_org_api_key":       {},
+	"x_user_api_key":      {},
 }
 
 func isSecretKey(key string) bool {

@@ -43,37 +43,34 @@ type UpdateAuthConfigInput struct {
 }
 
 func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput) (string, error) {
-	authCfg := map[string]any{}
+	req := createAuthConfigRequest{
+		Toolkit: toolkitRef{Slug: in.ToolkitSlug},
+		AuthConfig: createAuthConfigBody{
+			Type: models.AuthConfigCreateCustom,
+		},
+	}
 	if in.Managed {
-		authCfg["type"] = models.AuthConfigCreateManaged
+		req.AuthConfig.Type = models.AuthConfigCreateManaged
 		if len(in.Scopes) > 0 {
-			authCfg["credentials"] = map[string]any{"scopes": in.Scopes}
+			req.AuthConfig.Credentials = map[string]any{"scopes": in.Scopes}
 		} else if len(in.Credentials) > 0 {
-			authCfg["credentials"] = stringMapToAny(in.Credentials)
+			req.AuthConfig.Credentials = stringMapToAny(in.Credentials)
 		}
 	} else {
-		authCfg["type"] = models.AuthConfigCreateCustom
-		if in.AuthScheme != "" {
-			authCfg["auth_scheme"] = in.AuthScheme
-		}
+		req.AuthConfig.AuthScheme = in.AuthScheme
 		if len(in.Credentials) > 0 {
-			authCfg["credentials"] = stringMapToAny(in.Credentials)
+			req.AuthConfig.Credentials = stringMapToAny(in.Credentials)
 		}
 	}
 	if in.Name != "" {
-		authCfg["name"] = in.Name
+		req.AuthConfig.Name = in.Name
 	}
 	if in.RestrictToFollowingTools != nil {
-		authCfg["restrict_to_following_tools"] = in.RestrictToFollowingTools
-	}
-
-	body := map[string]any{
-		"toolkit":     map[string]string{"slug": in.ToolkitSlug},
-		"auth_config": authCfg,
+		req.AuthConfig.RestrictToFollowingTools = in.RestrictToFollowingTools
 	}
 
 	var raw json.RawMessage
-	if err := c.Do(ctx, ScopeProject, http.MethodPost, "/auth_configs", body, &raw); err != nil {
+	if err := c.Do(ctx, ScopeProject, http.MethodPost, "/auth_configs", req, &raw); err != nil {
 		return "", err
 	}
 	id, err := authConfigIDFromCreate(raw)
@@ -93,24 +90,15 @@ func (c *Client) GetAuthConfig(ctx context.Context, id string) (models.AuthConfi
 }
 
 func (c *Client) UpdateAuthConfig(ctx context.Context, id string, in UpdateAuthConfigInput) error {
-	body := map[string]any{}
+	body := updateAuthConfigBody{Type: models.AuthConfigUpdateCustom}
 	if in.Managed {
-		body["type"] = models.AuthConfigUpdateDefault
-		if in.Scopes != nil {
-			body["scopes"] = *in.Scopes
-		}
-	} else {
-		body["type"] = models.AuthConfigUpdateCustom
-		if in.Credentials != nil {
-			body["credentials"] = stringMapToAny(in.Credentials)
-		}
+		body.Type = models.AuthConfigUpdateDefault
+		body.Scopes = in.Scopes
+	} else if in.Credentials != nil {
+		body.Credentials = stringMapToAny(in.Credentials)
 	}
-	if in.Name != nil {
-		body["name"] = *in.Name
-	}
-	if in.RestrictToFollowingTools != nil {
-		body["restrict_to_following_tools"] = *in.RestrictToFollowingTools
-	}
+	body.Name = in.Name
+	body.RestrictToFollowingTools = in.RestrictToFollowingTools
 	path := "/auth_configs/" + url.PathEscape(id)
 	return c.Do(ctx, ScopeProject, http.MethodPatch, path, body, nil)
 }
@@ -141,7 +129,31 @@ type authConfigWire struct {
 	LastUpdatedAt            string          `json:"last_updated_at"`
 	NoOfConnections          int             `json:"no_of_connections"`
 	Toolkit                  json.RawMessage `json:"toolkit"`
-	AuthConfig               json.RawMessage `json:"auth_config"`
+}
+
+type toolkitRef struct {
+	Slug string `json:"slug"`
+}
+
+type createAuthConfigRequest struct {
+	Toolkit    toolkitRef           `json:"toolkit"`
+	AuthConfig createAuthConfigBody `json:"auth_config"`
+}
+
+type createAuthConfigBody struct {
+	Type                     string         `json:"type"`
+	Name                     string         `json:"name,omitempty"`
+	AuthScheme               string         `json:"auth_scheme,omitempty"`
+	Credentials              map[string]any `json:"credentials,omitempty"`
+	RestrictToFollowingTools []string       `json:"restrict_to_following_tools,omitempty"`
+}
+
+type updateAuthConfigBody struct {
+	Type                     string         `json:"type"`
+	Name                     *string        `json:"name,omitempty"`
+	Scopes                   *string        `json:"scopes,omitempty"`
+	Credentials              map[string]any `json:"credentials,omitempty"`
+	RestrictToFollowingTools *[]string      `json:"restrict_to_following_tools,omitempty"`
 }
 
 func (w authConfigWire) toModel() models.AuthConfig {
