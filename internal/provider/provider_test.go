@@ -16,12 +16,19 @@ package provider
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
+
+const integrationTestModeEnvVar = "TF_ACC"
+
+func isIntegrationTestMode() bool {
+	return os.Getenv(integrationTestModeEnvVar) == "1"
+}
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"composio": providerserver.NewProtocol6WithError(New("test")()),
@@ -36,6 +43,17 @@ func TestAccProviderFactories(t *testing.T) {
 func testAccPreCheck(t *testing.T) {
 	if !isIntegrationTestMode() {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' is set to '1'")
+	}
+}
+
+func TestIsIntegrationTestMode(t *testing.T) {
+	t.Setenv(integrationTestModeEnvVar, "1")
+	if !isIntegrationTestMode() {
+		t.Fatalf("expected true, got %t", isIntegrationTestMode())
+	}
+	t.Setenv(integrationTestModeEnvVar, "0")
+	if isIntegrationTestMode() {
+		t.Fatalf("expected false, got %t", isIntegrationTestMode())
 	}
 }
 
