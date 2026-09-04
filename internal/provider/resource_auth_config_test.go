@@ -256,6 +256,44 @@ func TestUpdateInputOmitsNullRestrictTools(t *testing.T) {
 	if in.RestrictToFollowingTools != nil {
 		t.Fatal("null restrict_to_following_tools must be omitted from PATCH")
 	}
+
+	plan = authConfigResourceModel{
+		CustomAuth: &customAuthModel{
+			RestrictToFollowingTools: types.SetNull(types.StringType),
+		},
+	}
+	in, diags = updateInputFromModels(context.Background(), plan, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if in.RestrictToFollowingTools != nil {
+		t.Fatal("null custom restrict_to_following_tools must be omitted from PATCH")
+	}
+}
+
+func TestCreateInputMapsRestrictTools(t *testing.T) {
+	tools := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("GITHUB_GET_REPOS")})
+	in, diags := createInputFromModels(context.Background(), authConfigResourceModel{
+		ToolkitSlug: types.StringValue("github"),
+		ManagedAuth: &managedAuthModel{RestrictToFollowingTools: tools, Scopes: types.SetNull(types.StringType)},
+	}, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if len(in.RestrictToFollowingTools) != 1 || in.RestrictToFollowingTools[0] != "GITHUB_GET_REPOS" {
+		t.Fatalf("managed tools = %#v", in.RestrictToFollowingTools)
+	}
+
+	in, diags = createInputFromModels(context.Background(), authConfigResourceModel{
+		ToolkitSlug: types.StringValue("github"),
+		CustomAuth:  &customAuthModel{AuthScheme: types.StringValue("OAUTH2"), RestrictToFollowingTools: tools},
+	}, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if len(in.RestrictToFollowingTools) != 1 || in.RestrictToFollowingTools[0] != "GITHUB_GET_REPOS" {
+		t.Fatalf("custom tools = %#v", in.RestrictToFollowingTools)
+	}
 }
 
 func TestUpdateInputClearsManagedScopes(t *testing.T) {

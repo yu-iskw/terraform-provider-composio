@@ -241,7 +241,7 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 		}
 		return
 	}
-	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
+	if err := r.loadAfterWrite(ctx, id, &plan); err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after create", err.Error())
 		return
 	}
@@ -291,7 +291,7 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 			return
 		}
 	}
-	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
+	if err := r.loadAfterWrite(ctx, id, &plan); err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after update", err.Error())
 		return
 	}
@@ -343,14 +343,15 @@ func (r *authConfigResource) ModifyPlan(ctx context.Context, req resource.Modify
 	}
 }
 
-func (r *authConfigResource) loadAfterWrite(ctx context.Context, id string, enabled bool, dest *authConfigResourceModel) error {
+func (r *authConfigResource) loadAfterWrite(ctx context.Context, id string, dest *authConfigResourceModel) error {
 	remote, err := r.client.GetAuthConfig(ctx, id)
 	if err != nil {
 		return err
 	}
-	if remote.Enabled() != enabled {
+	wantEnabled := dest.Enabled.ValueBool()
+	if remote.Enabled() != wantEnabled {
 		status := models.AuthConfigStatusEnabled
-		if !enabled {
+		if !wantEnabled {
 			status = models.AuthConfigStatusDisabled
 		}
 		if err := r.client.SetAuthConfigStatus(ctx, id, status); err != nil {
@@ -371,21 +372,17 @@ func createInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		ToolkitSlug: plan.ToolkitSlug.ValueString(),
 		Name:        plan.Name.ValueString(),
 	}
+	in.RestrictToFollowingTools, diags = setToStrings(ctx, plan.restrictToFollowingTools())
+	if diags.HasError() {
+		return in, diags
+	}
 	switch {
 	case plan.ManagedAuth != nil:
 		in.Managed = true
-		in.RestrictToFollowingTools, diags = setToStrings(ctx, plan.ManagedAuth.RestrictToFollowingTools)
-		if diags.HasError() {
-			return in, diags
-		}
 		in.Scopes, diags = setToStrings(ctx, plan.ManagedAuth.Scopes)
 	case plan.CustomAuth != nil:
 		in.Managed = false
 		in.AuthScheme = plan.CustomAuth.AuthScheme.ValueString()
-		in.RestrictToFollowingTools, diags = setToStrings(ctx, plan.CustomAuth.RestrictToFollowingTools)
-		if diags.HasError() {
-			return in, diags
-		}
 		creds, d := credentialsFromConfig(ctx, config.CustomAuth)
 		diags.Append(d...)
 		in.Credentials = creds
@@ -400,12 +397,13 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		name := plan.Name.ValueString()
 		in.Name = &name
 	}
+	tools := plan.restrictToFollowingTools()
+	if !tools.IsNull() && !tools.IsUnknown() {
+		converted, d := setToStrings(ctx, tools)
+		diags.Append(d...)
+		in.RestrictToFollowingTools = &converted
+	}
 	if plan.ManagedAuth != nil {
-		if !plan.ManagedAuth.RestrictToFollowingTools.IsNull() && !plan.ManagedAuth.RestrictToFollowingTools.IsUnknown() {
-			tools, d := setToStrings(ctx, plan.ManagedAuth.RestrictToFollowingTools)
-			diags.Append(d...)
-			in.RestrictToFollowingTools = &tools
-		}
 		if !plan.ManagedAuth.Scopes.IsNull() && !plan.ManagedAuth.Scopes.IsUnknown() {
 			scopes, d := setToStrings(ctx, plan.ManagedAuth.Scopes)
 			diags.Append(d...)
@@ -413,11 +411,6 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		}
 	}
 	if plan.CustomAuth != nil {
-		if !plan.CustomAuth.RestrictToFollowingTools.IsNull() && !plan.CustomAuth.RestrictToFollowingTools.IsUnknown() {
-			tools, d := setToStrings(ctx, plan.CustomAuth.RestrictToFollowingTools)
-			diags.Append(d...)
-			in.RestrictToFollowingTools = &tools
-		}
 		creds, d := credentialsFromConfig(ctx, config.CustomAuth)
 		diags.Append(d...)
 		if len(creds) > 0 {
@@ -447,6 +440,16 @@ func setToStrings(ctx context.Context, s types.Set) ([]string, diag.Diagnostics)
 	return out, diags
 }
 
+func (m authConfigResourceModel) restrictToFollowingTools() types.Set {
+	if m.ManagedAuth != nil {
+		return m.ManagedAuth.RestrictToFollowingTools
+	}
+	if m.CustomAuth != nil {
+		return m.CustomAuth.RestrictToFollowingTools
+	}
+	return types.SetNull(types.StringType)
+}
+
 func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	m.ID = types.StringValue(remote.ID)
 	if remote.ToolkitSlug != "" {
@@ -462,13 +465,7 @@ func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	m.Status = types.StringValue(remote.Status)
 	m.CreatedAt = types.StringValue(remote.CreatedAt)
 
-	priorTools := types.SetNull(types.StringType)
-	if m.ManagedAuth != nil {
-		priorTools = m.ManagedAuth.RestrictToFollowingTools
-	} else if m.CustomAuth != nil {
-		priorTools = m.CustomAuth.RestrictToFollowingTools
-	}
-	tools := optionalStringSet(remote.RestrictToFollowingTools, priorTools)
+	tools := optionalStringSet(remote.RestrictToFollowingTools, m.restrictToFollowingTools())
 	if remote.IsComposioManaged {
 		priorScopes := types.SetNull(types.StringType)
 		if m.ManagedAuth != nil {

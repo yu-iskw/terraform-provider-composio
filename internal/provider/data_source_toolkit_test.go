@@ -16,7 +16,6 @@ package provider
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -32,7 +31,7 @@ func TestToolkitDataSourceMetadata(t *testing.T) {
 }
 
 func TestAccPreCheckSkipsWithoutTFACC(t *testing.T) {
-	if os.Getenv("TF_ACC") == "1" {
+	if isIntegrationTestMode() {
 		t.Skip("running under TF_ACC")
 	}
 	testAccPreCheck(t)
