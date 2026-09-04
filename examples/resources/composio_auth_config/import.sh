@@ -1,0 +1,1 @@
+terraform import composio_auth_config.github ac_abc123

@@ -1,49 +1,60 @@
-# Terraform Provider Template
+# Terraform Provider for Composio
 
-This repository is a template for building custom Terraform providers with the HashiCorp Terraform Plugin Framework.
+Manage durable Composio control-plane configuration with Terraform. This provider is for platform configuration, not for user OAuth, sessions, or tool execution.
 
-It includes:
-
-- A generic provider configuration with `endpoint` and sensitive `api_key` attributes
-- Optional `max_concurrent_requests` and `requests_per_second` to cap HTTP concurrency and average rate (defaults: 10 / 10)
-- One example resource, `template_example_item`
-- One example data source, `template_example_item`
-- Documentation, examples, tests, build, lint, and release scaffolding
-
-Replace the placeholder client in `internal/your_service` (YOUR_SERVICE layer), and the example resource and data source, with code for your product API.
+Source address: `yu-iskw/composio`.
 
 ## Example Usage
 
 ```hcl
 terraform {
   required_providers {
-    template = {
-      source = "example/template"
+    composio = {
+      source = "yu-iskw/composio"
     }
   }
 }
 
-provider "template" {
-  endpoint = "https://api.example.com"
-  api_key  = var.api_key
-
-  # max_concurrent_requests = 5
-  # requests_per_second     = 20
+provider "composio" {
+  # Falls back to COMPOSIO_API_KEY / COMPOSIO_ORG_API_KEY
 }
 
-resource "template_example_item" "example" {
-  name        = "example"
-  description = "Created by the provider template"
+data "composio_toolkit" "github" {
+  slug = "github"
 }
 
-data "template_example_item" "example" {
-  name = template_example_item.example.name
+resource "composio_auth_config" "github" {
+  toolkit_slug = data.composio_toolkit.github.slug
+
+  managed_auth = {
+    restrict_to_following_tools = [
+      "GITHUB_CREATE_ISSUE",
+      "GITHUB_GET_ISSUE",
+    ]
+  }
 }
 ```
 
-## Development
+## Provider configuration
 
-Optional: with [mise](https://mise.jdx.dev/), run `mise trust` if prompted, then `mise install` to get the pinned Trunk CLI from `mise.toml` (Go is not installed via mise).
+| Attribute                 | Env                    | Purpose                                            |
+| ------------------------- | ---------------------- | -------------------------------------------------- |
+| `api_key`                 | `COMPOSIO_API_KEY`     | Project key (`x-api-key`)                          |
+| `org_api_key`             | `COMPOSIO_ORG_API_KEY` | Organization key (`x-org-api-key`)                 |
+| `endpoint`                | `COMPOSIO_ENDPOINT`    | API origin. Default `https://backend.composio.dev` |
+| `max_concurrent_requests` |                        | In-flight HTTP cap. Default 8                      |
+| `request_timeout`         |                        | Go duration. Default `30s`                         |
+
+At least one credential is required. Project-scoped resources need `api_key`. The client always calls `/api/v3.1` under the origin. That prefix does not float.
+
+## Current surface
+
+- Resource `composio_auth_config` (import: auth config id)
+- Data source `composio_toolkit`
+
+`Sensitive` hides values in the Terraform UI. It does not make state secret-free. `custom_auth.credentials` is write-only (Terraform 1.15+) and is not stored in state. A credentials-only edit does not produce a plan.
+
+## Development
 
 ```shell
 make test
@@ -51,4 +62,4 @@ go build -v ./
 go generate ./...
 ```
 
-Use `internal/provider` for Terraform wiring and `internal/your_service` for your API client (rename when you fork; see that directory’s `README.md`).
+Acceptance tests need `TF_ACC=1` and `COMPOSIO_API_KEY` (dedicated project key). They are skipped in default `make test`. See [CONTRIBUTING.md](CONTRIBUTING.md).

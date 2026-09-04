@@ -4,7 +4,7 @@ Shared guidance for agents working in this repository.
 
 ## Overview
 
-This is a template Terraform provider written in Go with the HashiCorp Terraform Plugin Framework. The provider is intentionally generic and includes one example resource and one example data source.
+This is a Terraform provider for Composio written in Go with the HashiCorp Terraform Plugin Framework. It manages durable Composio control-plane objects. It does not model user OAuth, sessions, or tool execution.
 
 ## mise (optional)
 
@@ -13,6 +13,7 @@ If you use [mise](https://mise.jdx.dev/), run `mise trust` in the repo root on f
 ## Key Commands
 
 - Unit tests: `make test`
+- Acceptance tests: `make testacc` (requires `COMPOSIO_API_KEY`; see CONTRIBUTING.md)
 - Build: `go build -v ./`
 - Generate docs: `go generate ./...`
 - Format: `make format`
@@ -22,7 +23,8 @@ If you use [mise](https://mise.jdx.dev/), run `mise trust` in the repo root on f
 
 - `main.go`: provider server entry point
 - `internal/provider`: provider schema, configuration, resources, data sources, embedded docs, and tests
-- `internal/your_service`: HTTP API client (`Client.HTTP`, YOUR_SERVICE placeholder) with optional rate and concurrency limits (rename when you fork; see `internal/your_service/README.md`)
+- `internal/composio/api`: Composio REST client (v3.1, typed errors, retries, org/project headers)
+- `internal/composio/models`: domain models without Terraform types
 - `examples`: Terraform examples used by docs generation
 - `docs`: provider documentation
 - `tools`: Go tool dependencies
@@ -30,8 +32,6 @@ If you use [mise](https://mise.jdx.dev/), run `mise trust` in the repo root on f
 
 ## Development Notes
 
-- Keep the template small and easy to adapt.
-- Prefer real, deterministic tests over mocks.
-- Do not add product-specific API behavior unless adapting the template for a concrete provider.
-- Keep provider examples generic until the repository is renamed for a real provider.
+- Prefer real, deterministic tests over mocks. HTTP tests use `httptest.Server`.
+- Do not wrap runtime Composio APIs (tool execute, sessions, connect links) as resources.
 - Git hooks for this repo are **Trunk-only** (`make setup-dev` runs `trunk git-hooks sync`); there is no separate pre-commit install step.

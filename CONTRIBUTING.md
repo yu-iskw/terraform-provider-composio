@@ -1,11 +1,11 @@
 # Contributing
 
-This repository is a starting point for custom Terraform providers built with the Terraform Plugin Framework.
+This repository is the Terraform provider for Composio.
 
 ## Prerequisites
 
 - Go, using the version declared in `go.mod` (install Go yourself; it is not provided via mise here)
-- Terraform, using the version declared in `.terraform-version`
+- Terraform 1.15 or later. See `.terraform-version`
 - GNU Make
 
 Optional: [mise](https://mise.jdx.dev/) — run `mise trust` in the repo root if needed, then `mise install` to install the **Trunk CLI** only from [`mise.toml`](mise.toml). Go stays outside mise. When upgrading Trunk, update both `.trunk/trunk.yaml` `cli.version` and `mise.toml` `trunk = "..."`.
@@ -14,38 +14,52 @@ Quality checks use **Trunk** (`trunk check` / `trunk fmt`) plus **`gosec`** and 
 
 ## Local Development
 
-Run the common checks:
-
 ```shell
 make test
 go build -v ./
 go generate ./...
-```
-
-Run formatting before sending changes:
-
-```shell
 make format
 ```
+
+Acceptance tests:
+
+Use a **dedicated** Composio project API key. Current Acc coverage exercises `composio_toolkit` (read), managed `composio_auth_config` (create/update/import/destroy), and optionally `composio_custom_toolkit` when `COMPOSIO_ACC_CUSTOM_MCP_URL` is set to a public HTTPS MCP endpoint. Do not point Acc at a production project.
+
+```shell
+export TF_ACC=1
+export COMPOSIO_API_KEY=...
+# optional: export COMPOSIO_ENDPOINT=https://backend.composio.dev
+# optional: export COMPOSIO_ACC_CUSTOM_MCP_URL=https://mcp.example.com/mcp
+make testacc
+```
+
+`make testacc` sets `TF_ACC_TERRAFORM_VERSION` from `.terraform-version` (1.15+) so Acc does not pick a tfenv global default when the plugin-testing helper runs Terraform from a temp directory.
+
+Optional `.env` (Make does **not** auto-load it):
+
+```shell
+cp .env.template .env
+# set COMPOSIO_API_KEY
+set -a && source .env && set +a
+make testacc
+```
+
+Targeted runs:
+
+```shell
+make testacc TESTARGS='-run TestAccToolkit'
+make testacc TESTARGS='-run TestAccAuthConfig'
+```
+
+CI: `.github/workflows/acceptance.yml` is `workflow_dispatch` and injects `COMPOSIO_API_KEY` from the `composio-acceptance` environment.
 
 ## Repository Structure
 
 - `main.go`: provider server entry point
-- `internal/provider`: provider implementation, resources, data sources, docs embedded by tests, and unit tests
-- `internal/your_service`: HTTP API client (`Client.HTTP`, YOUR_SERVICE placeholder) with optional rate and concurrency limits (rename when you fork; see `internal/your_service/README.md`)
+- `internal/provider`: Terraform wiring, resources, data sources, embedded docs, tests
+- `internal/composio/api`: HTTP client for `/api/v3.1`
+- `internal/composio/models`: domain models
 - `examples`: Terraform examples used by documentation generation
-- `docs`: generated or hand-maintained provider documentation
-- `tools`: Go tool dependency tracking for code generation and analysis
+- `docs`: generated provider documentation
+- `tools`: Go tool dependency tracking
 - `mise.toml`: optional Trunk CLI pin for mise users
-
-## Adapting The Template
-
-1. Rename the module path in `go.mod`.
-2. Update the provider address in `main.go`.
-3. Rename the provider type in `internal/provider/provider.go`.
-4. Rename `internal/your_service` to a meaningful import path and package name for your API client; update imports under `internal/provider/` (see `internal/your_service/README.md`).
-5. Replace or extend `internal/your_service` (see `Client.HTTP` and optional provider rate or concurrency attributes) and the example resource/data source files with real API-backed implementations.
-6. Update examples and generated docs.
-7. Run tests, build, and documentation generation.
-
-Acceptance tests should be added once the provider has a real external API and deterministic test environment.

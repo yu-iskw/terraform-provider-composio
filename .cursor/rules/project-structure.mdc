@@ -1,7 +1,8 @@
 # Project Structure Guide
 
-- `internal/provider`: Terraform provider implementation, example resource/data source, embedded docs, and tests.
-- `internal/your_service`: YOUR_SERVICE placeholder API client package (rename when adapting this template).
+- `internal/provider`: Terraform provider implementation, resources, data sources, embedded docs, and tests.
+- `internal/composio/api`: Composio REST client for `/api/v3.1`.
+- `internal/composio/models`: Domain models without Terraform types.
 - `examples`: Terraform examples used by documentation generation.
 - `docs`: Provider documentation.
 - `tools`: Go tool dependency tracking.
@@ -9,5 +10,3 @@
 - `go.mod` and `go.sum`: Go module and dependency metadata.
 - `.github`: CI and release workflows.
 - `.trunk`: Tooling configuration.
-
-Keep this repository generic until it is adapted for a concrete provider.

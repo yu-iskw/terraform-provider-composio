@@ -50,6 +50,7 @@ website/vendor
 
 
 # built binary
+terraform-provider-composio
 terraform-provider-template
 
 # Test shell

@@ -39,7 +39,6 @@ linters:
       - builtin$
       - examples$
       - internal/provider/provider_test.go
-      - internal/provider/utils.go # Added to ignore unused function errors
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
