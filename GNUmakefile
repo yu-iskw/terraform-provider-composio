@@ -4,9 +4,14 @@ default: test
 test:
 	unset TF_ACC && cd "internal/" && go test -count=1 -v ./...
 
+# Pin Acc Terraform via TF_ACC_TERRAFORM_VERSION (from .terraform-version).
+# terraform-plugin-testing runs the CLI from a temp dir; tfenv shims then fall
+# back to the global default (often below the supported floor) and skip Acc cases.
+TF_ACC_TERRAFORM_VERSION ?= $(shell cat .terraform-version 2>/dev/null)
+
 .PHONY: testacc
 testacc:
-	TF_ACC=1 go test ./internal/provider/... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 TF_ACC_TERRAFORM_VERSION="$(TF_ACC_TERRAFORM_VERSION)" go test ./internal/provider/... -v $(TESTARGS) -timeout 120m
 
 .PHONY: clean
 clean:

@@ -41,8 +41,12 @@ func TestAccProviderFactories(t *testing.T) {
 }
 
 func testAccPreCheck(t *testing.T) {
+	t.Helper()
 	if !isIntegrationTestMode() {
 		t.Skip("Acceptance tests skipped unless env 'TF_ACC' is set to '1'")
+	}
+	if os.Getenv("COMPOSIO_API_KEY") == "" {
+		t.Fatal("COMPOSIO_API_KEY must be set for acceptance tests")
 	}
 }
 

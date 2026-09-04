@@ -7,18 +7,38 @@ description: Guide execution of Terraform provider acceptance tests (TF_ACC) wit
 
 ## Purpose
 
-Standardize running acceptance tests in this repository. Acceptance tests use `terraform-plugin-testing` with `TF_ACC=1` and may call a live API once you add real resources and wire credentials.
+Standardize running acceptance tests in this repository. Acceptance tests use `terraform-plugin-testing` with `TF_ACC=1` and call the live Composio API.
 
 ## Prerequisites
 
-### 1. When acceptance tests exist
+### 1. Credentials
 
-Before running acceptance tests, confirm how `testAccPreCheck` and test configs expect credentials. This template ships with fast unit tests only; when you add `TestAcc...` cases, document required environment variables (for example values from `.env.template` in the repository root: `TEMPLATE_ENDPOINT`, `TEMPLATE_API_KEY`).
+Acceptance tests require a **dedicated** Composio project API key (do not use a production project).
 
-### If credentials are required and missing
+- `COMPOSIO_API_KEY` (required): project key (`x-api-key`)
+- `COMPOSIO_ENDPOINT` (optional): API origin; defaults to `https://backend.composio.dev`
+- `COMPOSIO_ORG_API_KEY` is **not** required for current Acc coverage (toolkit + managed auth config)
 
-- Copy `.env.template` to `.env` when you introduce live-API tests: `cp .env.template .env`
-- Fill in values before running `make testacc`.
+Optional local `.env` (not loaded by Make):
+
+```shell
+cp .env.template .env
+# edit COMPOSIO_API_KEY
+set -a && source .env && set +a
+make testacc
+```
+
+Or export variables directly:
+
+```shell
+export TF_ACC=1
+export COMPOSIO_API_KEY=...
+make testacc
+```
+
+### If credentials are missing
+
+`testAccPreCheck` fails the suite when `TF_ACC=1` and `COMPOSIO_API_KEY` is empty.
 
 ## Workflow
 
@@ -26,12 +46,13 @@ Before running acceptance tests, confirm how `testAccPreCheck` and test configs 
 
 - **Command**: `make testacc`
 - **Details**: Runs `go test ./internal/provider/...` with `TF_ACC=1`.
-- **Warning**: Slow and may create or change real infrastructure once tests target a live API.
+- **Warning**: Creates and destroys real auth configs in the project tied to the API key.
 
 ### 2. Targeted acceptance tests
 
 - **Command**: `make testacc TESTARGS="-run <Pattern>"`
-- **Example**: `make testacc TESTARGS="-run TestAccExampleItem"`
+- **Example (data source)**: `make testacc TESTARGS="-run TestAccToolkit"`
+- **Example (resource)**: `make testacc TESTARGS="-run TestAccAuthConfig"`
 
 ## Distinction from unit tests
 
@@ -41,5 +62,6 @@ Before running acceptance tests, confirm how `testAccPreCheck` and test configs 
 ## Troubleshooting
 
 - **Timeouts**: `make testacc TESTARGS="-timeout 120m"`.
-- **Authentication**: Verify variables in `.env` match what `testAccPreCheck` and test configs expect.
-- **Cleanup**: After failures against a real API, remove stray resources in the target system or via API if tests did not roll back.
+- **Authentication**: Confirm `COMPOSIO_API_KEY` is a valid project key for a non-production project.
+- **Cleanup**: After failures, delete orphaned auth configs in the Composio project if destroy did not complete.
+- **Terraform version**: Acc requires Terraform CLI 1.15 or later (`tfversion.SkipBelow(1.15.0)`). `make testacc` sets `TF_ACC_TERRAFORM_VERSION` from `.terraform-version` so tests do not skip when a tfenv shim resolves an older global default from the plugin-testing temp directory. Override with `make testacc TF_ACC_TERRAFORM_VERSION=1.15.0` or `TF_ACC_TERRAFORM_PATH=/path/to/terraform` if needed.

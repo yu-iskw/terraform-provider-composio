@@ -12,9 +12,9 @@ description: Run `make testacc` with acceptance-test safeguards, fix failures, a
 
 ## Safety and boundaries
 
-- **Acceptance tests may create, modify, or destroy real infrastructure** once wired to a live API. Do **not** run `make testacc` against unknown production accounts or shared environments.
-- If required credentials, endpoints, or cloud projects are **missing or ambiguous**, **stop and ask the user** before running or re-running tests.
-- This template may have **few or no** real `TestAcc` cases yet; output may show skips—confirm that is expected before "fixing" nonexistent tests.
+- **Acceptance tests may create, modify, or destroy real infrastructure** (managed auth configs) in the project for `COMPOSIO_API_KEY`. Do **not** run `make testacc` against production accounts.
+- If `COMPOSIO_API_KEY` is **missing or ambiguous**, **stop and ask the user** before running or re-running tests.
+- Live Acc cases: `TestAccToolkitDataSource`, `TestAccAuthConfigResource_lifecycle`.
 
 ## Command
 
@@ -45,8 +45,9 @@ make testacc TESTARGS='-run ^TestAccYourPattern$'
 
 ## Common outcomes
 
-- **All skipped** — often `testAccPreCheck` skips when prerequisites are not met; see environment guidance in [run-acceptance-tests](../run-acceptance-tests/SKILL.md).
-- **Terraform CLI / provider config errors** — fix HCL fixtures or provider factory in tests.
+- **All skipped / Fatal PreCheck** — `TF_ACC` not `1`, or `COMPOSIO_API_KEY` missing; see [run-acceptance-tests](../run-acceptance-tests/SKILL.md).
+- **Skipped for Terraform CLI below 1.15** — `make testacc` should set `TF_ACC_TERRAFORM_VERSION` from `.terraform-version`. If Acc still sees an older CLI (common with tfenv shims + temp working dirs), re-run via `make testacc` or set `TF_ACC_TERRAFORM_PATH` to a real 1.15+ binary.
+- **Terraform CLI / provider config errors** — fix HCL under `internal/provider/acc_tests/` or provider factory in tests.
 - **API 401/403/404** — credentials or endpoint; do not hardcode secrets into the repo.
 
 ## Further reading

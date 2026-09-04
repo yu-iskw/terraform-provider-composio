@@ -62,7 +62,7 @@ Required:
 
 Optional:
 
-- `credentials` (Map of String, Sensitive, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.11 or later is required.
+- `credentials` (Map of String, Sensitive) Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.15 or later is required.
 - `restrict_to_following_tools` (Set of String) Tool slugs this auth config may use. If omitted, Terraform stores the tools Composio reports. Set to `[]` to clear. Order is not significant.
 
 

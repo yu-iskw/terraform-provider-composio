@@ -52,7 +52,7 @@ At least one credential is required. Project-scoped resources need `api_key`. Th
 - Resource `composio_auth_config` (import: auth config id)
 - Data source `composio_toolkit`
 
-`Sensitive` hides values in the Terraform UI. It does not make state secret-free. `custom_auth.credentials` is write-only (Terraform 1.11+) and is not stored in state. A credentials-only edit does not produce a plan.
+`Sensitive` hides values in the Terraform UI. It does not make state secret-free. `custom_auth.credentials` is write-only (Terraform 1.15+) and is not stored in state. A credentials-only edit does not produce a plan.
 
 ## Development
 
@@ -62,4 +62,4 @@ go build -v ./
 go generate ./...
 ```
 
-Acceptance tests need `TF_ACC=1` and `COMPOSIO_API_KEY`. They are skipped in default `make test`.
+Acceptance tests need `TF_ACC=1` and `COMPOSIO_API_KEY` (dedicated project key). They are skipped in default `make test`. See [CONTRIBUTING.md](CONTRIBUTING.md).

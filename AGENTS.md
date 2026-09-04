@@ -13,6 +13,7 @@ If you use [mise](https://mise.jdx.dev/), run `mise trust` in the repo root on f
 ## Key Commands
 
 - Unit tests: `make test`
+- Acceptance tests: `make testacc` (requires `COMPOSIO_API_KEY`; see CONTRIBUTING.md)
 - Build: `go build -v ./`
 - Generate docs: `go generate ./...`
 - Format: `make format`

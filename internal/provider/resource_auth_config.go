@@ -142,7 +142,7 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 						Sensitive:           true,
 						WriteOnly:           true,
 						ElementType:         types.StringType,
-						MarkdownDescription: "Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.11 or later is required.",
+						MarkdownDescription: "Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.15 or later is required.",
 					},
 					"restrict_to_following_tools": restrictToFollowingToolsAttribute(),
 				},

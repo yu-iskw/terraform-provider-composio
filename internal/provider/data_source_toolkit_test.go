@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/tfversion"
 )
 
 func TestToolkitDataSourceMetadata(t *testing.T) {
@@ -35,4 +37,38 @@ func TestAccPreCheckSkipsWithoutTFACC(t *testing.T) {
 		t.Skip("running under TF_ACC")
 	}
 	testAccPreCheck(t)
+}
+
+func TestAccToolkitDataSource(t *testing.T) {
+	if !isIntegrationTestMode() {
+		t.Skip("Skipping acceptance test for data_source_composio_toolkit")
+	}
+
+	providerConfig, err := getProviderConfig()
+	if err != nil {
+		t.Fatalf("getProviderConfig: %v", err)
+	}
+
+	dataConfig, err := ReadAccTestResource([]string{"data_sources", "composio_toolkit", "data", "010_data.tf"})
+	if err != nil {
+		t.Fatalf("ReadAccTestResource: %v", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(tfversion.Version1_15_0),
+		},
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig + dataConfig,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.composio_toolkit.github", "slug", "github"),
+					resource.TestCheckResourceAttr("data.composio_toolkit.github", "id", "github"),
+					resource.TestCheckResourceAttrSet("data.composio_toolkit.github", "name"),
+				),
+			},
+		},
+	})
 }
