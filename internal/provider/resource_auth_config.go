@@ -529,6 +529,9 @@ func authConfigPatchNeeded(plan, state authConfigResourceModel) bool {
 	return true
 }
 
+// setsEqual treats two nulls or two unknowns as equal even when one is a
+// zero-value set. types.Set.Equal returns false if either side has no
+// element type, which would force a PATCH on enabled-only updates.
 func setsEqual(a, b types.Set) bool {
 	if a.IsNull() && b.IsNull() {
 		return true

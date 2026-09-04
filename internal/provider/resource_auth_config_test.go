@@ -200,6 +200,20 @@ func TestAuthConfigPatchNeededSkipsEnabledOnly(t *testing.T) {
 	}
 }
 
+func TestSetsEqualTreatsUntypedNullAsEqual(t *testing.T) {
+	var zero types.Set
+	typed := types.SetNull(types.StringType)
+	if zero.Equal(typed) {
+		t.Fatal("framework Equal must stay false for untyped null; otherwise setsEqual is redundant")
+	}
+	if !setsEqual(zero, typed) {
+		t.Fatal("untyped and typed null sets must compare equal")
+	}
+	if !setsEqual(typed, typed) {
+		t.Fatal("typed null sets must compare equal")
+	}
+}
+
 func TestAuthConfigPatchNeededIgnoresUnknownComputedName(t *testing.T) {
 	nullSet := types.SetNull(types.StringType)
 	state := authConfigResourceModel{
