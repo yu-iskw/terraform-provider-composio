@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
@@ -164,10 +163,6 @@ func (p *composioProvider) DataSources(ctx context.Context) []func() datasource.
 	return []func() datasource.DataSource{
 		NewToolkitDataSource,
 	}
-}
-
-func (p *composioProvider) Functions(ctx context.Context) []func() function.Function {
-	return []func() function.Function{}
 }
 
 func New(version string) func() provider.Provider {

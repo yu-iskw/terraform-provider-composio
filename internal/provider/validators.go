@@ -22,20 +22,17 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 )
 
-// ValidateNonEmptyString validates that a string attribute is not empty or null.
+// ValidateNonEmptyString rejects a known empty string. Null and unknown values pass.
 type ValidateNonEmptyString struct{}
 
-// Description returns a plain text description of the validator's behavior.
 func (v ValidateNonEmptyString) Description(ctx context.Context) string {
-	return "string must not be empty or null"
+	return "string must not be empty"
 }
 
-// MarkdownDescription returns a markdown formatted description of the validator's behavior.
 func (v ValidateNonEmptyString) MarkdownDescription(ctx context.Context) string {
-	return "string must not be empty or null"
+	return "string must not be empty"
 }
 
-// ValidateString performs the validation.
 func (v ValidateNonEmptyString) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
 	if req.ConfigValue.IsNull() || req.ConfigValue.IsUnknown() {
 		return

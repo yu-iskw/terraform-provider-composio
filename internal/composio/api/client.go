@@ -34,8 +34,8 @@ const (
 	DefaultTimeout       = 30 * time.Second
 	DefaultMaxConcurrent = int64(8)
 	maxResponseBytes     = 1 << 20
-	headerProjectAPIKey  = "x-api-key"
-	headerOrgKey         = "x-org-" + "api-key"
+	projectKeyHeader     = "x-api-key"
+	orgKeyHeader         = "x-org-api-key"
 )
 
 type AuthScope int
@@ -118,16 +118,8 @@ func New(opts Options) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) Endpoint() string {
-	return c.endpoint
-}
-
 func (c *Client) HasProjectKey() bool {
 	return c.projectAPIKey != ""
-}
-
-func (c *Client) HasOrgKey() bool {
-	return c.orgAPIKey != ""
 }
 
 func (c *Client) Do(ctx context.Context, scope AuthScope, method, path string, body any, out any) error {
@@ -206,9 +198,9 @@ func (c *Client) roundTrip(ctx context.Context, scope AuthScope, method, path st
 	}
 	switch scope {
 	case ScopeOrganization:
-		req.Header.Set(headerOrgKey, c.orgAPIKey)
+		req.Header.Set(orgKeyHeader, c.orgAPIKey)
 	default:
-		req.Header.Set(headerProjectAPIKey, c.projectAPIKey)
+		req.Header.Set(projectKeyHeader, c.projectAPIKey)
 	}
 
 	resp, err := c.http.Do(req)
@@ -252,6 +244,12 @@ func validateEndpoint(endpoint string) error {
 	}
 	if u.Host == "" {
 		return fmt.Errorf("endpoint must include a host")
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("endpoint must be an origin without query or fragment")
+	}
+	if path := strings.TrimSuffix(u.EscapedPath(), "/"); path != "" {
+		return fmt.Errorf("endpoint must be an origin without a path; the provider appends %s", APIVersionPath)
 	}
 	return nil
 }

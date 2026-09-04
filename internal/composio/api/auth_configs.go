@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/yu-iskw/terraform-provider-composio/internal/composio/models"
 )
@@ -39,7 +40,7 @@ type UpdateAuthConfigInput struct {
 	Name                     *string
 	Credentials              map[string]string
 	RestrictToFollowingTools *[]string
-	Scopes                   *string
+	Scopes                   *[]string
 }
 
 func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput) (string, error) {
@@ -53,8 +54,6 @@ func (c *Client) CreateAuthConfig(ctx context.Context, in CreateAuthConfigInput)
 		req.AuthConfig.Type = models.AuthConfigCreateManaged
 		if len(in.Scopes) > 0 {
 			req.AuthConfig.Credentials = map[string]any{"scopes": in.Scopes}
-		} else if len(in.Credentials) > 0 {
-			req.AuthConfig.Credentials = stringMapToAny(in.Credentials)
 		}
 	} else {
 		req.AuthConfig.AuthScheme = in.AuthScheme
@@ -93,7 +92,10 @@ func (c *Client) UpdateAuthConfig(ctx context.Context, id string, in UpdateAuthC
 	body := updateAuthConfigBody{Type: models.AuthConfigUpdateCustom}
 	if in.Managed {
 		body.Type = models.AuthConfigUpdateDefault
-		body.Scopes = in.Scopes
+		if in.Scopes != nil {
+			joined := strings.Join(*in.Scopes, ",")
+			body.Scopes = &joined
+		}
 	} else if in.Credentials != nil {
 		body.Credentials = stringMapToAny(in.Credentials)
 	}
@@ -126,8 +128,7 @@ type authConfigWire struct {
 	IsComposioManaged        bool            `json:"is_composio_managed"`
 	RestrictToFollowingTools []string        `json:"restrict_to_following_tools"`
 	CreatedAt                string          `json:"created_at"`
-	LastUpdatedAt            string          `json:"last_updated_at"`
-	NoOfConnections          int             `json:"no_of_connections"`
+	Credentials              json.RawMessage `json:"credentials"`
 	Toolkit                  json.RawMessage `json:"toolkit"`
 }
 
@@ -143,7 +144,7 @@ type createAuthConfigRequest struct {
 type createAuthConfigBody struct {
 	Type                     string         `json:"type"`
 	Name                     string         `json:"name,omitempty"`
-	AuthScheme               string         `json:"auth_scheme,omitempty"`
+	AuthScheme               string         `json:"authScheme,omitempty"`
 	Credentials              map[string]any `json:"credentials,omitempty"`
 	RestrictToFollowingTools []string       `json:"restrict_to_following_tools,omitempty"`
 }
@@ -171,6 +172,11 @@ func (w authConfigWire) toModel() models.AuthConfig {
 			}
 		}
 	}
+	scopes, scopesSet := parseCredentialScopes(w.Credentials)
+	var scopePtr *[]string
+	if scopesSet {
+		scopePtr = &scopes
+	}
 	return models.AuthConfig{
 		ID:                       w.ID,
 		Name:                     w.Name,
@@ -178,11 +184,9 @@ func (w authConfigWire) toModel() models.AuthConfig {
 		AuthScheme:               w.AuthScheme,
 		IsComposioManaged:        w.IsComposioManaged,
 		Status:                   w.Status,
-		Type:                     w.Type,
 		RestrictToFollowingTools: w.RestrictToFollowingTools,
+		Scopes:                   scopePtr,
 		CreatedAt:                w.CreatedAt,
-		LastUpdatedAt:            w.LastUpdatedAt,
-		NoOfConnections:          w.NoOfConnections,
 	}
 }
 
@@ -207,6 +211,45 @@ func stringMapToAny(in map[string]string) map[string]any {
 	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func parseCredentialScopes(raw json.RawMessage) ([]string, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, false
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) != nil {
+		return nil, false
+	}
+	s, ok := obj["scopes"]
+	if !ok || len(s) == 0 || string(s) == "null" {
+		return nil, false
+	}
+	var str string
+	if json.Unmarshal(s, &str) == nil {
+		return splitCommaList(str), true
+	}
+	var arr []string
+	if json.Unmarshal(s, &arr) == nil {
+		return arr, true
+	}
+	return nil, false
+}
+
+func splitCommaList(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return []string{}
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
 	}
 	return out
 }

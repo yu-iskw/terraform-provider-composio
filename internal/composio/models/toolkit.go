@@ -14,7 +14,6 @@
 
 package models
 
-// Toolkit is a catalog object from GET /api/v3.1/toolkits/{slug}.
 type Toolkit struct {
 	Slug          string
 	Name          string

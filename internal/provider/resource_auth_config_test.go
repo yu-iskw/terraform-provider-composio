@@ -114,3 +114,98 @@ func TestOptionalStringSetPreservesEmptyConfig(t *testing.T) {
 		t.Fatalf("got %#v", got.Elements())
 	}
 }
+
+func TestApplyRemoteReadsScopes(t *testing.T) {
+	scopes := []string{"repo", "read:org"}
+	m := authConfigResourceModel{}
+	m.applyRemote(models.AuthConfig{
+		ID:                "ac_scopes",
+		IsComposioManaged: true,
+		Status:            models.AuthConfigStatusEnabled,
+		Scopes:            &scopes,
+	})
+	if m.ManagedAuth == nil {
+		t.Fatal("expected managed_auth")
+	}
+	var got []string
+	if diags := m.ManagedAuth.Scopes.ElementsAs(context.Background(), &got, false); diags.HasError() {
+		t.Fatalf("scopes: %v", diags)
+	}
+	if len(got) != 2 || got[0] != "repo" {
+		t.Fatalf("scopes = %#v", got)
+	}
+}
+
+func TestApplyRemoteKeepsPriorScopesWhenRemoteOmits(t *testing.T) {
+	prior := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("repo")})
+	m := authConfigResourceModel{ManagedAuth: &managedAuthModel{Scopes: prior}}
+	m.applyRemote(models.AuthConfig{
+		ID:                "ac_omit",
+		IsComposioManaged: true,
+		Status:            models.AuthConfigStatusEnabled,
+	})
+	var got []string
+	if diags := m.ManagedAuth.Scopes.ElementsAs(context.Background(), &got, false); diags.HasError() {
+		t.Fatalf("scopes: %v", diags)
+	}
+	if len(got) != 1 || got[0] != "repo" {
+		t.Fatalf("prior scopes must remain when GET omits credentials.scopes, got %#v", got)
+	}
+}
+
+func TestApplyRemoteClearsScopesWhenRemoteEmpty(t *testing.T) {
+	empty := []string{}
+	prior := types.SetValueMust(types.StringType, []attr.Value{types.StringValue("repo")})
+	m := authConfigResourceModel{ManagedAuth: &managedAuthModel{Scopes: prior}}
+	m.applyRemote(models.AuthConfig{
+		ID:                "ac_empty",
+		IsComposioManaged: true,
+		Status:            models.AuthConfigStatusEnabled,
+		Scopes:            &empty,
+	})
+	if m.ManagedAuth.Scopes.IsNull() {
+		t.Fatal("cleared scopes should be an empty set, not null")
+	}
+	if len(m.ManagedAuth.Scopes.Elements()) != 0 {
+		t.Fatalf("got %#v", m.ManagedAuth.Scopes.Elements())
+	}
+}
+
+func TestAuthConfigPatchNeededSkipsEnabledOnly(t *testing.T) {
+	state := authConfigResourceModel{
+		Name:        types.StringValue("GitHub"),
+		Enabled:     types.BoolValue(true),
+		ManagedAuth: &managedAuthModel{Scopes: types.SetNull(types.StringType)},
+	}
+	plan := authConfigResourceModel{
+		Name:        types.StringValue("GitHub"),
+		Enabled:     types.BoolValue(false),
+		ManagedAuth: &managedAuthModel{Scopes: types.SetNull(types.StringType)},
+	}
+	if authConfigPatchNeeded(plan, state, authConfigResourceModel{}) {
+		t.Fatal("enabled-only change must not PATCH auth config")
+	}
+	plan.Name = types.StringValue("Renamed")
+	if !authConfigPatchNeeded(plan, state, authConfigResourceModel{}) {
+		t.Fatal("name change must PATCH")
+	}
+}
+
+func TestUpdateInputClearsManagedScopes(t *testing.T) {
+	plan := authConfigResourceModel{
+		ManagedAuth: &managedAuthModel{
+			RestrictToFollowingTools: types.SetNull(types.StringType),
+			Scopes:                   types.SetValueMust(types.StringType, []attr.Value{}),
+		},
+	}
+	in, diags := updateInputFromModels(context.Background(), plan, authConfigResourceModel{})
+	if diags.HasError() {
+		t.Fatalf("diags: %v", diags)
+	}
+	if in.Scopes == nil {
+		t.Fatal("empty configured scopes must be sent so the API can clear them")
+	}
+	if len(*in.Scopes) != 0 {
+		t.Fatalf("scopes = %#v", *in.Scopes)
+	}
+}

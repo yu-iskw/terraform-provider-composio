@@ -25,7 +25,6 @@ const (
 	AuthConfigUpdateCustom  = "custom"
 )
 
-// AuthConfig is a durable Composio authentication configuration.
 type AuthConfig struct {
 	ID                       string
 	Name                     string
@@ -34,10 +33,8 @@ type AuthConfig struct {
 	IsComposioManaged        bool
 	Status                   string
 	RestrictToFollowingTools []string
+	Scopes                   *[]string
 	CreatedAt                string
-	LastUpdatedAt            string
-	NoOfConnections          int
-	Type                     string
 }
 
 func (a AuthConfig) Enabled() bool {

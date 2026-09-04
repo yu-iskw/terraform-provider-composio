@@ -20,7 +20,6 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/yu-iskw/terraform-provider-composio/internal/composio/api"
@@ -126,8 +125,7 @@ func (d *toolkitDataSource) Configure(ctx context.Context, req datasource.Config
 		return
 	}
 	if !client.HasProjectKey() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("api_key"),
+		resp.Diagnostics.AddError(
 			"Missing Project API Key",
 			"data.composio_toolkit requires `api_key` or COMPOSIO_API_KEY.",
 		)

@@ -26,7 +26,6 @@ import (
 
 const maxErrorBody = 4096
 
-// APIError is a typed Composio HTTP failure.
 type APIError struct {
 	StatusCode   int
 	Method       string
@@ -58,14 +57,6 @@ func (e *APIError) Error() string {
 func IsNotFound(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
-}
-
-func IsUnauthorized(err error) bool {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		return false
-	}
-	return apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden
 }
 
 type wireError struct {

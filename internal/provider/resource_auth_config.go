@@ -170,14 +170,16 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 }
 
 func (r *authConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
-	var cfg authConfigResourceModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+	var managed, custom types.Object
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("managed_auth"), &managed)...)
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("custom_auth"), &custom)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	hasManaged := cfg.ManagedAuth != nil
-	hasCustom := cfg.CustomAuth != nil
-	if hasManaged == hasCustom {
+	if managed.IsUnknown() || custom.IsUnknown() {
+		return
+	}
+	if managed.IsNull() == custom.IsNull() {
 		resp.Diagnostics.AddError(
 			"Invalid Auth Config Mode",
 			"Set exactly one of `managed_auth` or `custom_auth`.",
@@ -195,8 +197,7 @@ func (r *authConfigResource) Configure(ctx context.Context, req resource.Configu
 		return
 	}
 	if !client.HasProjectKey() {
-		resp.Diagnostics.AddAttributeError(
-			path.Root("api_key"),
+		resp.Diagnostics.AddError(
 			"Missing Project API Key",
 			"composio_auth_config requires `api_key` or COMPOSIO_API_KEY.",
 		)
@@ -261,20 +262,23 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
 	var config authConfigResourceModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	in, diags := updateInputFromModels(ctx, plan, config)
-	resp.Diagnostics.Append(diags...)
+	var state authConfigResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	id := plan.ID.ValueString()
-	if err := r.client.UpdateAuthConfig(ctx, id, in); err != nil {
-		resp.Diagnostics.AddError("Unable to update Composio auth config", formatAPIError(err))
-		return
+	if authConfigPatchNeeded(plan, state, config) {
+		in, diags := updateInputFromModels(ctx, plan, config)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if err := r.client.UpdateAuthConfig(ctx, id, in); err != nil {
+			resp.Diagnostics.AddError("Unable to update Composio auth config", formatAPIError(err))
+			return
+		}
 	}
 	if err := r.loadAfterWrite(ctx, id, plan.Enabled.ValueBool(), &plan); err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after update", formatAPIError(err))
@@ -379,11 +383,10 @@ func updateInputFromModels(ctx context.Context, plan, config authConfigResourceM
 		tools, d := setToStrings(ctx, plan.ManagedAuth.RestrictToFollowingTools)
 		diags.Append(d...)
 		in.RestrictToFollowingTools = &tools
-		scopes, d := setToStrings(ctx, plan.ManagedAuth.Scopes)
-		diags.Append(d...)
-		if len(scopes) > 0 {
-			joined := strings.Join(scopes, ",")
-			in.Scopes = &joined
+		if !plan.ManagedAuth.Scopes.IsNull() && !plan.ManagedAuth.Scopes.IsUnknown() {
+			scopes, d := setToStrings(ctx, plan.ManagedAuth.Scopes)
+			diags.Append(d...)
+			in.Scopes = &scopes
 		}
 	}
 	if plan.CustomAuth != nil {
@@ -437,13 +440,13 @@ func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	}
 	tools := optionalStringSet(remote.RestrictToFollowingTools, priorTools)
 	if remote.IsComposioManaged {
-		scopes := types.SetNull(types.StringType)
+		priorScopes := types.SetNull(types.StringType)
 		if m.ManagedAuth != nil {
-			scopes = m.ManagedAuth.Scopes
+			priorScopes = m.ManagedAuth.Scopes
 		}
 		m.ManagedAuth = &managedAuthModel{
 			RestrictToFollowingTools: tools,
-			Scopes:                   scopes,
+			Scopes:                   remoteStringSet(remote.Scopes, priorScopes),
 		}
 		m.CustomAuth = nil
 	} else {
@@ -465,6 +468,33 @@ func optionalStringSet(values []string, prior types.Set) types.Set {
 		return types.SetNull(types.StringType)
 	}
 	return stringSet(values)
+}
+
+func remoteStringSet(values *[]string, prior types.Set) types.Set {
+	if values == nil {
+		if prior.IsUnknown() {
+			return types.SetNull(types.StringType)
+		}
+		return prior
+	}
+	return optionalStringSet(*values, prior)
+}
+
+func authConfigPatchNeeded(plan, state, config authConfigResourceModel) bool {
+	if !plan.Name.Equal(state.Name) {
+		return true
+	}
+	if config.CustomAuth != nil && !config.CustomAuth.Credentials.IsNull() && !config.CustomAuth.Credentials.IsUnknown() {
+		return true
+	}
+	if plan.ManagedAuth != nil && state.ManagedAuth != nil {
+		return !plan.ManagedAuth.RestrictToFollowingTools.Equal(state.ManagedAuth.RestrictToFollowingTools) ||
+			!plan.ManagedAuth.Scopes.Equal(state.ManagedAuth.Scopes)
+	}
+	if plan.CustomAuth != nil && state.CustomAuth != nil {
+		return !plan.CustomAuth.RestrictToFollowingTools.Equal(state.CustomAuth.RestrictToFollowingTools)
+	}
+	return true
 }
 
 func stringSet(values []string) types.Set {

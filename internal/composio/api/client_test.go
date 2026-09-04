@@ -360,3 +360,128 @@ func TestInvalidEndpoint(t *testing.T) {
 		t.Fatal("expected invalid endpoint")
 	}
 }
+
+func TestEndpointRejectsPathAndQuery(t *testing.T) {
+	for _, endpoint := range []string{
+		"https://backend.composio.dev/api/v3.1",
+		"https://backend.composio.dev/?x=1",
+		"https://backend.composio.dev/#frag",
+	} {
+		if _, err := New(Options{ProjectAPIKey: "k", Endpoint: endpoint}); err == nil {
+			t.Fatalf("expected error for %s", endpoint)
+		}
+	}
+	if _, err := New(Options{ProjectAPIKey: "k", Endpoint: "https://backend.composio.dev/"}); err != nil {
+		t.Fatalf("origin with trailing slash must be accepted: %v", err)
+	}
+}
+
+func TestCreateAuthConfigCustomUsesAuthScheme(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s", r.Method)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		ac, ok := body["auth_config"].(map[string]any)
+		if !ok {
+			t.Errorf("auth_config = %T", body["auth_config"])
+			return
+		}
+		if ac["authScheme"] != "OAUTH2" {
+			t.Errorf("authScheme = %v", ac["authScheme"])
+		}
+		if _, exists := ac["auth_scheme"]; exists {
+			t.Errorf("unexpected snake_case auth_scheme in create body: %v", ac["auth_scheme"])
+		}
+		w.Header().Set("Content-Type", "application/json")
+		writeJSON(t, w, `{"auth_config":{"id":"ac_custom"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	id, err := c.CreateAuthConfig(context.Background(), CreateAuthConfigInput{
+		ToolkitSlug: "github",
+		AuthScheme:  "OAUTH2",
+		Credentials: map[string]string{"client_id": "id"},
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if id != "ac_custom" {
+		t.Fatalf("id = %s", id)
+	}
+}
+
+func TestGetAuthConfigReadsCredentialScopes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, `{
+			"id":"ac_123",
+			"name":"GitHub",
+			"status":"ENABLED",
+			"auth_scheme":"OAUTH2",
+			"is_composio_managed":true,
+			"credentials":{"scopes":"repo, read:org"},
+			"toolkit":{"slug":"github"}
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	got, err := c.GetAuthConfig(context.Background(), "ac_123")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Scopes == nil {
+		t.Fatal("expected scopes from credentials")
+	}
+	if len(*got.Scopes) != 2 || (*got.Scopes)[0] != "repo" || (*got.Scopes)[1] != "read:org" {
+		t.Fatalf("scopes = %#v", *got.Scopes)
+	}
+}
+
+func TestUpdateAuthConfigClearsScopes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode: %v", err)
+			return
+		}
+		if body["type"] != "default" {
+			t.Errorf("type = %v", body["type"])
+		}
+		if body["scopes"] != "" {
+			t.Errorf("scopes = %#v", body["scopes"])
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	empty := []string{}
+	if err := c.UpdateAuthConfig(context.Background(), "ac_123", UpdateAuthConfigInput{
+		Managed: true,
+		Scopes:  &empty,
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+}
+
+func TestParseCredentialScopes(t *testing.T) {
+	got, ok := parseCredentialScopes([]byte(`{"scopes":["repo","gist"]}`))
+	if !ok || len(got) != 2 || got[0] != "repo" {
+		t.Fatalf("array scopes = %#v present=%v", got, ok)
+	}
+	got, ok = parseCredentialScopes([]byte(`{"client_id":"x"}`))
+	if ok {
+		t.Fatalf("missing scopes should be absent, got %#v", got)
+	}
+	got, ok = parseCredentialScopes([]byte(`{"scopes":""}`))
+	if !ok || got == nil || len(got) != 0 {
+		t.Fatalf("empty string scopes = %#v present=%v", got, ok)
+	}
+}
