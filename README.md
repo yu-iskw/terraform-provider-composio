@@ -52,7 +52,7 @@ At least one credential is required. Project-scoped resources need `api_key`. Th
 - Resource `composio_auth_config` (import: auth config id)
 - Data source `composio_toolkit`
 
-`Sensitive` hides values in the Terraform UI. It does not make state secret-free. `custom_auth.credentials` is write-only (Terraform 1.11+) and is not stored in state.
+`Sensitive` hides values in the Terraform UI. It does not make state secret-free. `custom_auth.credentials` is write-only (Terraform 1.11+) and is not stored in state. A credentials-only edit does not produce a plan.
 
 ## Development
 

@@ -51,17 +51,14 @@ func isRetryableStatus(status int) bool {
 }
 
 func isRetryableTransport(err error) bool {
-	if err == nil {
-		return false
-	}
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	return false
+	return errors.As(err, &netErr)
 }
 
 func backoff(attempt int, retryAfter time.Duration) time.Duration {
+	if retryAfter > retryMaxDelay {
+		return retryMaxDelay
+	}
 	if retryAfter > 0 {
 		return retryAfter
 	}

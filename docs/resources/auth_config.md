@@ -40,9 +40,9 @@ resource "composio_auth_config" "github" {
 
 ### Optional
 
-- `custom_auth` (Attributes) Bring your own credentials. Exactly one of `managed_auth` or `custom_auth` must be set. (see [below for nested schema](#nestedatt--custom_auth))
-- `enabled` (Boolean) When false, the provider disables the auth config after create or update. Disabled configs cannot start new connections.
-- `managed_auth` (Attributes) Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set. (see [below for nested schema](#nestedatt--managed_auth))
+- `custom_auth` (Attributes) Bring your own credentials. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `managed_auth` forces replacement. (see [below for nested schema](#nestedatt--custom_auth))
+- `enabled` (Boolean) When false, the provider disables the auth config when Composio still reports it enabled. Disabled configs cannot start new connections.
+- `managed_auth` (Attributes) Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `custom_auth` forces replacement. (see [below for nested schema](#nestedatt--managed_auth))
 - `name` (String) Display name. The API may assign a default when omitted.
 
 ### Read-Only
@@ -62,7 +62,7 @@ Required:
 
 Optional:
 
-- `credentials` (Map of String, Sensitive, Write-only) Write-only credential map. Values are sent on create and update and are never stored in state. Terraform 1.11 or later is required.
+- `credentials` (Map of String, Sensitive, Write-only) Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.11 or later is required.
 - `restrict_to_following_tools` (Set of String) Tool slugs this auth config may use. Order is not significant.
 
 

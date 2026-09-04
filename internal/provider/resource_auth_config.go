@@ -37,6 +37,7 @@ var (
 	_ resource.Resource                   = &authConfigResource{}
 	_ resource.ResourceWithConfigure      = &authConfigResource{}
 	_ resource.ResourceWithImportState    = &authConfigResource{}
+	_ resource.ResourceWithModifyPlan     = &authConfigResource{}
 	_ resource.ResourceWithValidateConfig = &authConfigResource{}
 )
 
@@ -104,11 +105,11 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(true),
-				MarkdownDescription: "When false, the provider disables the auth config after create or update. Disabled configs cannot start new connections.",
+				MarkdownDescription: "When false, the provider disables the auth config when Composio still reports it enabled. Disabled configs cannot start new connections.",
 			},
 			"managed_auth": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set.",
+				MarkdownDescription: "Use Composio-managed authentication. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `custom_auth` forces replacement.",
 				Attributes: map[string]schema.Attribute{
 					"restrict_to_following_tools": schema.SetAttribute{
 						Optional:            true,
@@ -124,7 +125,7 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 			},
 			"custom_auth": schema.SingleNestedAttribute{
 				Optional:            true,
-				MarkdownDescription: "Bring your own credentials. Exactly one of `managed_auth` or `custom_auth` must be set.",
+				MarkdownDescription: "Bring your own credentials. Exactly one of `managed_auth` or `custom_auth` must be set. Switching to `managed_auth` forces replacement.",
 				Attributes: map[string]schema.Attribute{
 					"auth_scheme": schema.StringAttribute{
 						Required:            true,
@@ -138,7 +139,7 @@ func (r *authConfigResource) Schema(ctx context.Context, req resource.SchemaRequ
 						Sensitive:           true,
 						WriteOnly:           true,
 						ElementType:         types.StringType,
-						MarkdownDescription: "Write-only credential map. Values are sent on create and update and are never stored in state. Terraform 1.11 or later is required.",
+						MarkdownDescription: "Write-only credential map. Never stored in state. Sent on create when set. Sent on update only when Terraform also plans another change. A credentials-only edit does not produce a plan. Terraform 1.11 or later is required.",
 					},
 					"restrict_to_following_tools": schema.SetAttribute{
 						Optional:            true,
@@ -223,10 +224,16 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddError("Unable to create Composio auth config", formatAPIError(err))
 		return
 	}
-
-	if err := r.reconcileStatus(ctx, id, plan.Enabled.ValueBool()); err != nil {
-		resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), types.StringValue(id))...)
+	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if !plan.Enabled.ValueBool() {
+		if err := r.reconcileStatus(ctx, id, false); err != nil {
+			resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
+			return
+		}
 	}
 
 	remote, err := r.client.GetAuthConfig(ctx, id)
@@ -234,10 +241,7 @@ func (r *authConfigResource) Create(ctx context.Context, req resource.CreateRequ
 		resp.Diagnostics.AddError("Unable to read Composio auth config after create", formatAPIError(err))
 		return
 	}
-	resp.Diagnostics.Append(plan.applyRemote(ctx, remote)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	plan.applyRemote(remote)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -257,10 +261,7 @@ func (r *authConfigResource) Read(ctx context.Context, req resource.ReadRequest,
 		resp.Diagnostics.AddError("Unable to read Composio auth config", formatAPIError(err))
 		return
 	}
-	resp.Diagnostics.Append(state.applyRemote(ctx, remote)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	state.applyRemote(remote)
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
@@ -279,23 +280,28 @@ func (r *authConfigResource) Update(ctx context.Context, req resource.UpdateRequ
 		return
 	}
 
-	if err := r.client.UpdateAuthConfig(ctx, plan.ID.ValueString(), in); err != nil {
+	id := plan.ID.ValueString()
+	if err := r.client.UpdateAuthConfig(ctx, id, in); err != nil {
 		resp.Diagnostics.AddError("Unable to update Composio auth config", formatAPIError(err))
 		return
 	}
-	if err := r.reconcileStatus(ctx, plan.ID.ValueString(), plan.Enabled.ValueBool()); err != nil {
-		resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
-		return
-	}
-	remote, err := r.client.GetAuthConfig(ctx, plan.ID.ValueString())
+	remote, err := r.client.GetAuthConfig(ctx, id)
 	if err != nil {
 		resp.Diagnostics.AddError("Unable to read Composio auth config after update", formatAPIError(err))
 		return
 	}
-	resp.Diagnostics.Append(plan.applyRemote(ctx, remote)...)
-	if resp.Diagnostics.HasError() {
-		return
+	if remote.Enabled() != plan.Enabled.ValueBool() {
+		if err := r.reconcileStatus(ctx, id, plan.Enabled.ValueBool()); err != nil {
+			resp.Diagnostics.AddError("Unable to set Composio auth config status", formatAPIError(err))
+			return
+		}
+		remote, err = r.client.GetAuthConfig(ctx, id)
+		if err != nil {
+			resp.Diagnostics.AddError("Unable to read Composio auth config after status change", formatAPIError(err))
+			return
+		}
 	}
+	plan.applyRemote(remote)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -312,6 +318,22 @@ func (r *authConfigResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *authConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+}
+
+func (r *authConfigResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+	var state authConfigResourceModel
+	var plan authConfigResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if (state.ManagedAuth != nil) != (plan.ManagedAuth != nil) {
+		resp.RequiresReplace = append(resp.RequiresReplace, path.Root("managed_auth"), path.Root("custom_auth"))
+	}
 }
 
 func (r *authConfigResource) reconcileStatus(ctx context.Context, id string, enabled bool) error {
@@ -401,8 +423,7 @@ func setToStrings(ctx context.Context, s types.Set) ([]string, diag.Diagnostics)
 	return out, diags
 }
 
-func (m *authConfigResourceModel) applyRemote(ctx context.Context, remote models.AuthConfig) diag.Diagnostics {
-	var diags diag.Diagnostics
+func (m *authConfigResourceModel) applyRemote(remote models.AuthConfig) {
 	m.ID = types.StringValue(remote.ID)
 	m.ToolkitSlug = types.StringValue(remote.ToolkitSlug)
 	m.Name = types.StringValue(remote.Name)
@@ -412,7 +433,13 @@ func (m *authConfigResourceModel) applyRemote(ctx context.Context, remote models
 	m.Status = types.StringValue(remote.Status)
 	m.CreatedAt = types.StringValue(remote.CreatedAt)
 
-	tools := stringSet(remote.RestrictToFollowingTools)
+	priorTools := types.SetNull(types.StringType)
+	if m.ManagedAuth != nil {
+		priorTools = m.ManagedAuth.RestrictToFollowingTools
+	} else if m.CustomAuth != nil {
+		priorTools = m.CustomAuth.RestrictToFollowingTools
+	}
+	tools := optionalStringSet(remote.RestrictToFollowingTools, priorTools)
 	if remote.IsComposioManaged {
 		scopes := types.SetNull(types.StringType)
 		if m.ManagedAuth != nil {
@@ -435,7 +462,13 @@ func (m *authConfigResourceModel) applyRemote(ctx context.Context, remote models
 		}
 		m.ManagedAuth = nil
 	}
-	return diags
+}
+
+func optionalStringSet(values []string, prior types.Set) types.Set {
+	if len(values) == 0 && (prior.IsNull() || prior.IsUnknown()) {
+		return types.SetNull(types.StringType)
+	}
+	return stringSet(values)
 }
 
 func stringSet(values []string) types.Set {
@@ -460,7 +493,7 @@ func formatAPIError(err error) string {
 	b := strings.Builder{}
 	b.WriteString(apiErr.Message)
 	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("HTTP status: %d\n", apiErr.StatusCode))
+	fmt.Fprintf(&b, "HTTP status: %d\n", apiErr.StatusCode)
 	if apiErr.RequestID != "" {
 		b.WriteString("Request ID: ")
 		b.WriteString(apiErr.RequestID)

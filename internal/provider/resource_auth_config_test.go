@@ -19,7 +19,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/yu-iskw/terraform-provider-composio/internal/composio/api"
 	"github.com/yu-iskw/terraform-provider-composio/internal/composio/models"
 )
@@ -35,7 +37,7 @@ func TestAuthConfigResourceMetadata(t *testing.T) {
 
 func TestApplyRemoteManaged(t *testing.T) {
 	m := authConfigResourceModel{}
-	diags := m.applyRemote(context.Background(), models.AuthConfig{
+	m.applyRemote(models.AuthConfig{
 		ID:                       "ac_1",
 		Name:                     "GitHub",
 		ToolkitSlug:              "github",
@@ -45,9 +47,6 @@ func TestApplyRemoteManaged(t *testing.T) {
 		RestrictToFollowingTools: []string{"GITHUB_CREATE_ISSUE"},
 		CreatedAt:                "2026-01-01T00:00:00Z",
 	})
-	if diags.HasError() {
-		t.Fatalf("%v", diags)
-	}
 	if m.ID.ValueString() != "ac_1" {
 		t.Fatalf("id = %s", m.ID.ValueString())
 	}
@@ -61,7 +60,7 @@ func TestApplyRemoteManaged(t *testing.T) {
 
 func TestApplyRemoteCustom(t *testing.T) {
 	m := authConfigResourceModel{}
-	diags := m.applyRemote(context.Background(), models.AuthConfig{
+	m.applyRemote(models.AuthConfig{
 		ID:                "ac_2",
 		Name:              "Notion",
 		ToolkitSlug:       "notion",
@@ -69,9 +68,6 @@ func TestApplyRemoteCustom(t *testing.T) {
 		IsComposioManaged: false,
 		Status:            models.AuthConfigStatusDisabled,
 	})
-	if diags.HasError() {
-		t.Fatalf("%v", diags)
-	}
 	if m.Enabled.ValueBool() {
 		t.Fatal("expected disabled")
 	}
@@ -93,5 +89,28 @@ func TestFormatAPIError(t *testing.T) {
 	}
 	if strings.Contains(msg, "shh") {
 		t.Fatalf("secret leaked: %s", msg)
+	}
+}
+
+func TestApplyRemoteKeepsOmittedToolsNull(t *testing.T) {
+	m := authConfigResourceModel{}
+	m.applyRemote(models.AuthConfig{
+		ID:                "ac_3",
+		IsComposioManaged: true,
+		Status:            models.AuthConfigStatusEnabled,
+	})
+	if m.ManagedAuth == nil || !m.ManagedAuth.RestrictToFollowingTools.IsNull() {
+		t.Fatal("omitted restrict_to_following_tools must stay null")
+	}
+}
+
+func TestOptionalStringSetPreservesEmptyConfig(t *testing.T) {
+	empty := types.SetValueMust(types.StringType, []attr.Value{})
+	got := optionalStringSet(nil, empty)
+	if got.IsNull() {
+		t.Fatal("explicit empty set must stay empty")
+	}
+	if len(got.Elements()) != 0 {
+		t.Fatalf("got %#v", got.Elements())
 	}
 }

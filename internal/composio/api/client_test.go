@@ -40,6 +40,13 @@ func testClient(t *testing.T, srv *httptest.Server, opts Options) *Client {
 	return c
 }
 
+func writeJSON(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	if _, err := io.WriteString(w, body); err != nil {
+		t.Errorf("write response: %v", err)
+	}
+}
+
 func TestNewRequiresCredential(t *testing.T) {
 	_, err := New(Options{})
 	if err == nil {
@@ -62,7 +69,7 @@ func TestDoSendsProjectAPIKey(t *testing.T) {
 			t.Error("Authorization header must not be set")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"slug":"github","name":"GitHub"}`)
+		writeJSON(t, w, `{"slug":"github","name":"GitHub"}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -111,11 +118,11 @@ func TestRetryAfter429(t *testing.T) {
 		if n.Add(1) == 1 {
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
-			io.WriteString(w, `{"error":{"message":"slow down","code":429,"slug":"rate_limited"}}`)
+			writeJSON(t, w, `{"error":{"message":"slow down","code":429,"slug":"rate_limited"}}`)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"slug":"github","name":"GitHub"}`)
+		writeJSON(t, w, `{"slug":"github","name":"GitHub"}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -133,7 +140,7 @@ func TestDoesNotRetryPOST(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
-		io.WriteString(w, `{"error":{"message":"down"}}`)
+		writeJSON(t, w, `{"error":{"message":"down"}}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -150,7 +157,7 @@ func TestDoesNotRetryPOST(t *testing.T) {
 func TestNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"error":{"message":"missing","code":404,"request_id":"req_1"}}`)
+		writeJSON(t, w, `{"error":{"message":"missing","code":404,"request_id":"req_1"}}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -180,7 +187,7 @@ func asAPIError(err error, target **APIError) bool {
 func TestRedactsSecretsInAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"error":{"message":"bad creds","code":400},"client_secret":"super-secret","nested":{"api_key":"abc"}}`)
+		writeJSON(t, w, `{"error":{"message":"bad creds","code":400},"client_secret":"super-secret","nested":{"api_key":"abc"}}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -206,20 +213,31 @@ func TestCreateAuthConfigManagedThenGet(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v3.1/auth_configs":
 			var body map[string]any
-			json.NewDecoder(r.Body).Decode(&body)
-			toolkit := body["toolkit"].(map[string]any)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode create body: %v", err)
+				return
+			}
+			toolkit, ok := body["toolkit"].(map[string]any)
+			if !ok {
+				t.Errorf("toolkit = %T", body["toolkit"])
+				return
+			}
 			if toolkit["slug"] != "github" {
 				t.Errorf("toolkit slug = %v", toolkit["slug"])
 			}
-			ac := body["auth_config"].(map[string]any)
+			ac, ok := body["auth_config"].(map[string]any)
+			if !ok {
+				t.Errorf("auth_config = %T", body["auth_config"])
+				return
+			}
 			if ac["type"] != "use_composio_managed_auth" {
 				t.Errorf("type = %v", ac["type"])
 			}
 			w.Header().Set("Content-Type", "application/json")
-			io.WriteString(w, `{"auth_config":{"id":"ac_123","auth_scheme":"OAUTH2","is_composio_managed":true}}`)
+			writeJSON(t, w, `{"auth_config":{"id":"ac_123","auth_scheme":"OAUTH2","is_composio_managed":true}}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v3.1/auth_configs/ac_123":
 			w.Header().Set("Content-Type", "application/json")
-			io.WriteString(w, `{
+			writeJSON(t, w, `{
 				"id":"ac_123",
 				"name":"GitHub",
 				"status":"ENABLED",
@@ -260,7 +278,7 @@ func TestCreateAuthConfigManagedThenGet(t *testing.T) {
 func TestDeleteAuthConfigTreats404AsSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"error":{"message":"gone"}}`)
+		writeJSON(t, w, `{"error":{"message":"gone"}}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -287,7 +305,7 @@ func TestSetAuthConfigStatusPath(t *testing.T) {
 
 func TestToolkitAuthSchemesFromObjects(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `{"slug":"notion","name":"Notion","auth_schemes":[{"mode":"OAUTH2"},{"mode":"API_KEY"}]}`)
+		writeJSON(t, w, `{"slug":"notion","name":"Notion","auth_schemes":[{"mode":"OAUTH2"},{"mode":"API_KEY"}]}`)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -295,6 +313,41 @@ func TestToolkitAuthSchemesFromObjects(t *testing.T) {
 	tk, err := c.GetToolkit(context.Background(), "notion")
 	if err != nil {
 		t.Fatalf("GetToolkit: %v", err)
+	}
+	if len(tk.AuthSchemes) != 2 || tk.AuthSchemes[0] != "OAUTH2" {
+		t.Fatalf("schemes = %v", tk.AuthSchemes)
+	}
+}
+
+func TestToolkitNestedMetaAndAuthConfigDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, `{
+			"slug":"github",
+			"name":"GitHub",
+			"no_auth":false,
+			"auth_config_details":[{"mode":"OAUTH2"},{"mode":"API_KEY"}],
+			"meta":{
+				"description":"GitHub toolkit",
+				"logo":"https://example.com/github.png",
+				"app_url":"https://github.com",
+				"tools_count":12,
+				"triggers_count":3,
+				"version":"20260301_00"
+			}
+		}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := testClient(t, srv, Options{})
+	tk, err := c.GetToolkit(context.Background(), "github")
+	if err != nil {
+		t.Fatalf("GetToolkit: %v", err)
+	}
+	if tk.Description != "GitHub toolkit" || tk.Logo == "" || tk.AppURL != "https://github.com" {
+		t.Fatalf("meta = %+v", tk)
+	}
+	if tk.ToolsCount != 12 || tk.TriggersCount != 3 || tk.Version != "20260301_00" {
+		t.Fatalf("counts = %+v", tk)
 	}
 	if len(tk.AuthSchemes) != 2 || tk.AuthSchemes[0] != "OAUTH2" {
 		t.Fatalf("schemes = %v", tk.AuthSchemes)

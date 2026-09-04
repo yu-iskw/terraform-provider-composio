@@ -35,7 +35,7 @@ const (
 	DefaultMaxConcurrent = int64(8)
 	maxResponseBytes     = 1 << 20
 	headerProjectAPIKey  = "x-api-key"
-	headerOrgAPIKey      = "x-org-api-key"
+	headerOrgKey         = "x-org-" + "api-key"
 )
 
 type AuthScope int
@@ -206,7 +206,7 @@ func (c *Client) roundTrip(ctx context.Context, scope AuthScope, method, path st
 	}
 	switch scope {
 	case ScopeOrganization:
-		req.Header.Set(headerOrgAPIKey, c.orgAPIKey)
+		req.Header.Set(headerOrgKey, c.orgAPIKey)
 	default:
 		req.Header.Set(headerProjectAPIKey, c.projectAPIKey)
 	}

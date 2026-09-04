@@ -54,3 +54,10 @@ func TestBackoffHonorsRetryAfter(t *testing.T) {
 		t.Fatalf("got %s", d)
 	}
 }
+
+func TestBackoffClampsRetryAfter(t *testing.T) {
+	d := backoff(1, 30*time.Second)
+	if d != retryMaxDelay {
+		t.Fatalf("got %s", d)
+	}
+}
