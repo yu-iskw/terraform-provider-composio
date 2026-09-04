@@ -488,13 +488,23 @@ func authConfigPatchNeeded(plan, state, config authConfigResourceModel) bool {
 		return true
 	}
 	if plan.ManagedAuth != nil && state.ManagedAuth != nil {
-		return !plan.ManagedAuth.RestrictToFollowingTools.Equal(state.ManagedAuth.RestrictToFollowingTools) ||
-			!plan.ManagedAuth.Scopes.Equal(state.ManagedAuth.Scopes)
+		return !setsEqual(plan.ManagedAuth.RestrictToFollowingTools, state.ManagedAuth.RestrictToFollowingTools) ||
+			!setsEqual(plan.ManagedAuth.Scopes, state.ManagedAuth.Scopes)
 	}
 	if plan.CustomAuth != nil && state.CustomAuth != nil {
-		return !plan.CustomAuth.RestrictToFollowingTools.Equal(state.CustomAuth.RestrictToFollowingTools)
+		return !setsEqual(plan.CustomAuth.RestrictToFollowingTools, state.CustomAuth.RestrictToFollowingTools)
 	}
 	return true
+}
+
+func setsEqual(a, b types.Set) bool {
+	if a.IsNull() && b.IsNull() {
+		return true
+	}
+	if a.IsUnknown() && b.IsUnknown() {
+		return true
+	}
+	return a.Equal(b)
 }
 
 func stringSet(values []string) types.Set {

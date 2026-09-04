@@ -172,15 +172,22 @@ func TestApplyRemoteClearsScopesWhenRemoteEmpty(t *testing.T) {
 }
 
 func TestAuthConfigPatchNeededSkipsEnabledOnly(t *testing.T) {
+	nullSet := types.SetNull(types.StringType)
 	state := authConfigResourceModel{
-		Name:        types.StringValue("GitHub"),
-		Enabled:     types.BoolValue(true),
-		ManagedAuth: &managedAuthModel{Scopes: types.SetNull(types.StringType)},
+		Name:    types.StringValue("GitHub"),
+		Enabled: types.BoolValue(true),
+		ManagedAuth: &managedAuthModel{
+			RestrictToFollowingTools: nullSet,
+			Scopes:                   nullSet,
+		},
 	}
 	plan := authConfigResourceModel{
-		Name:        types.StringValue("GitHub"),
-		Enabled:     types.BoolValue(false),
-		ManagedAuth: &managedAuthModel{Scopes: types.SetNull(types.StringType)},
+		Name:    types.StringValue("GitHub"),
+		Enabled: types.BoolValue(false),
+		ManagedAuth: &managedAuthModel{
+			RestrictToFollowingTools: nullSet,
+			Scopes:                   nullSet,
+		},
 	}
 	if authConfigPatchNeeded(plan, state, authConfigResourceModel{}) {
 		t.Fatal("enabled-only change must not PATCH auth config")
