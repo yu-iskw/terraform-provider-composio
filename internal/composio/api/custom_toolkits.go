@@ -28,10 +28,12 @@ const (
 	CustomAuthModeNoAuth   = "NO_AUTH"
 	CustomAuthModeAPIKey   = "API_KEY"
 	CustomAuthModeDCROAuth = "DCR_OAUTH"
-	// CustomAPIKeyPlaceholder is the Composio template token for API_KEY headers
-	// (not a credential). Split so gosec G101 does not flag the literal.
-	CustomAPIKeyPlaceholder = "{{" + "generic_api_key" + "}}"
 )
+
+// CustomGenericPlaceholder is Composio's documented Custom MCP header
+// substitution token. Servers replace it with the connected-account secret;
+// the value is a template marker, not a credential.
+const CustomGenericPlaceholder = "{{generic_api_key}}"
 
 type CustomAuthScheme struct {
 	Mode         string

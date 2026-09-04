@@ -205,7 +205,7 @@ func (r *customToolkitResource) ValidateConfig(ctx context.Context, req resource
 			resp.Diagnostics.AddAttributeError(
 				path.Root("auth_scheme").AtName("headers"),
 				"Invalid Headers",
-				fmt.Sprintf("At least one header value must contain %q.", api.CustomAPIKeyPlaceholder),
+				fmt.Sprintf("At least one header value must contain %q.", api.CustomGenericPlaceholder),
 			)
 		}
 		if !config.AuthScheme.DiscoveryURL.IsNull() && !config.AuthScheme.DiscoveryURL.IsUnknown() && strings.TrimSpace(config.AuthScheme.DiscoveryURL.ValueString()) != "" {
@@ -401,7 +401,7 @@ func stripCustomPrefix(slug string) string {
 
 func headersContainAPIKeyPlaceholder(headers map[string]string) bool {
 	for _, v := range headers {
-		if strings.Contains(v, api.CustomAPIKeyPlaceholder) {
+		if strings.Contains(v, api.CustomGenericPlaceholder) {
 			return true
 		}
 	}

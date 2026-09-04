@@ -49,7 +49,7 @@ func TestStripCustomPrefix(t *testing.T) {
 
 func TestHeadersContainAPIKeyPlaceholder(t *testing.T) {
 	if !headersContainAPIKeyPlaceholder(map[string]string{
-		"Authorization": "Bearer " + api.CustomAPIKeyPlaceholder,
+		"Authorization": "Bearer " + api.CustomGenericPlaceholder,
 	}) {
 		t.Fatal("expected true")
 	}

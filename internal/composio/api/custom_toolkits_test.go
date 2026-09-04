@@ -23,6 +23,14 @@ import (
 	"testing"
 )
 
+func TestCustomGenericPlaceholder(t *testing.T) {
+	// Composio Custom MCP requires this exact header substitution token.
+	const want = "{{generic_api_key}}"
+	if CustomGenericPlaceholder != want {
+		t.Fatalf("got %q, want %q", CustomGenericPlaceholder, want)
+	}
+}
+
 func TestUpsertCustomToolkitSendsBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -61,7 +69,7 @@ func TestUpsertCustomToolkitSendsBody(t *testing.T) {
 			t.Fatalf("scheme = %#v", schemes[0])
 		}
 		headers, ok := scheme["headers"].(map[string]any)
-		if !ok || headers["Authorization"] != "Bearer {{generic_api_key}}" {
+		if !ok || headers["Authorization"] != "Bearer "+CustomGenericPlaceholder {
 			t.Errorf("headers = %#v", scheme["headers"])
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -76,7 +84,7 @@ func TestUpsertCustomToolkitSendsBody(t *testing.T) {
 		AppURL: "https://mcp.example.com/mcp",
 		AuthSchemes: []CustomAuthScheme{{
 			Mode:    CustomAuthModeAPIKey,
-			Headers: map[string]string{"Authorization": "Bearer {{generic_api_key}}"},
+			Headers: map[string]string{"Authorization": "Bearer " + CustomGenericPlaceholder},
 		}},
 	})
 	if err != nil {
